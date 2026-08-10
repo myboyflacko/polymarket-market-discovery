@@ -3,8 +3,8 @@ import logging
 
 import pytest
 
-from vl_polymarket_watchlist.core.logging import configure_logging
-from vl_polymarket_watchlist.settings import get_settings
+from polymarket_market_discovery.core.logging import configure_logging
+from polymarket_market_discovery.settings import get_settings
 
 
 @pytest.fixture(autouse=True)
@@ -15,7 +15,9 @@ def reset_logging() -> None:
     yield
 
     for handler in list(root_logger.handlers):
-        if handler.name and handler.name.startswith("vl_polymarket_watchlist_jsonl_"):
+        if handler.name and handler.name.startswith(
+            "polymarket_market_discovery_jsonl_"
+        ):
             root_logger.removeHandler(handler)
             handler.close()
 
@@ -27,7 +29,7 @@ def test_configure_logging_writes_jsonl_to_stdout(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("POLYMARKET_WATCHLIST_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("POLYMARKET_DISCOVERY_LOG_LEVEL", "DEBUG")
     get_settings.cache_clear()
 
     configure_logging()
@@ -37,7 +39,8 @@ def test_configure_logging_writes_jsonl_to_stdout(
     handlers = [
         handler
         for handler in root_logger.handlers
-        if handler.name and handler.name.startswith("vl_polymarket_watchlist_jsonl_")
+        if handler.name
+        and handler.name.startswith("polymarket_market_discovery_jsonl_")
     ]
 
     assert len(handlers) == 1

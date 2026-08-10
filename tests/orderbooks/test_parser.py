@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from vl_polymarket_watchlist.orderbooks.parser import parse_orderbook_payload
+from polymarket_market_discovery.orderbooks.parser import parse_orderbook_payload
 
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)

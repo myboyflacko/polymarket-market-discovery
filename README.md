@@ -1,177 +1,61 @@
-# VL Polymarket Watchlist
+# Polymarket Market Discovery
 
-VL Polymarket Watchlist baut ein reproduzierbares Polymarket-Collection-Universum:
+Der Service entdeckt Märkte über austauschbare Strategien, pflegt daraus ein
+kanonisches Market-Universum und sammelt Orderbook-Historie für alle aktuell
+handelbaren Outcome-Tokens.
 
-```text
-Discovery Sources
--> market_discovery_runs
--> market_discovery_observations
--> polymarket_conditions / polymarket_tokens
--> polymarket_watchlist_v
--> orderbook_collection_runs / orderbook_collection_items
--> orderbook_snapshots
-```
+Der Service nutzt ausschließlich öffentliche Read-Endpunkte und platziert keine
+Orders, führt keine Trades aus und bewegt keine Funds.
 
-Das Projekt platziert keine Live-Trades, keine echten Orders und bewegt keine
-Funds.
+## Pipeline
 
-## Scope
+1. **Discovery** speichert jeden Strategy-Run, Whale-Snapshot und jede Position
+   append-only. Die erste Strategie nimmt die Schnittmenge der Top-25 DAY/OVERALL
+   Leaderboards für PnL und Volume.
+2. **Market Registry** dedupliziert über `condition_id` und aktualisiert Status,
+   Enddatum sowie beide Outcome-Tokens über Gamma. Neue, unbekannte und alle noch
+   nicht terminalen Märkte werden erneut geprüft.
+3. **Orderbooks** sammeln beide Tokens aller kanonischen Märkte mit
+   `active=true`, `closed=false`, `archived=false` und `enable_order_book=true`.
 
-Gespeichert werden:
+Discovery-Historie wird nie als Collection-Universum interpretiert. Ein einmal
+entdeckter Markt bleibt in der Registry, bis Gamma seinen aktuellen Status ändert.
 
-- canonical Conditions und Outcome-Tokens
-- Discovery-Runs und append-only Market-Observations
-- manuelle Watchlist-Inclusions und Exclusions
-- Watchlist-Snapshots pro Orderbook-Collection-Run
-- Orderbook-Snapshots mit Validierungsstatus
-
-Nicht gespeichert werden:
-
-- dauerhafte Whale-Position-Full-Snapshots
-- Trade-Persistenz
-- HTTP API Endpunkte
-
-Whales sind nur eine Discovery-Quelle. Whale Discovery darf Current Positions
-temporär nutzen, persistiert daraus aber nur Market-Observations.
-
-## CLI
-
-Lokale Installation:
+## Start
 
 ```bash
-python -m pip install -e .
+cp .env.example .env
+docker compose up -d postgres
+docker compose --profile tools run --rm cli init-db
+docker compose up -d scheduler
 ```
 
-Datenbank migrieren:
+Einzelne oder alle Layer lassen sich über dieselbe CLI starten:
 
 ```bash
-vl-polymarket-watchlist init-db
+polymarket-market-discovery run discovery
+polymarket-market-discovery run markets
+polymarket-market-discovery run orderbooks
+polymarket-market-discovery run all
+
+polymarket-market-discovery schedule discovery
+polymarket-market-discovery schedule markets
+polymarket-market-discovery schedule orderbooks
+polymarket-market-discovery schedule all
 ```
 
-Discovery einmal ausführen:
+`--strategy` ist wiederholbar; ohne Angabe laufen alle registrierten Strategien.
+`run all` arbeitet fail-fast in der Reihenfolge Discovery, Markets, Orderbooks.
+Alle Layer teilen einen PostgreSQL Advisory Lock, damit Discovery/Registry und
+Orderbook-Sammlung nicht gleichzeitig schreiben.
 
-```bash
-vl-polymarket-watchlist run discovery
-```
+## Tabellen
 
-Orderbooks aus der aktiven Watchlist sammeln:
-
-```bash
-vl-polymarket-watchlist run orderbooks
-```
-
-Beides nacheinander:
-
-```bash
-vl-polymarket-watchlist run all
-```
-
-Scheduler starten:
-
-```bash
-vl-polymarket-watchlist schedule
-```
-
-Default-Intervalle:
-
-| Collector | Intervall |
-| --- | ---: |
-| discovery | 900s |
-| orderbooks | 300s |
-
-Orderbooks laufen unabhängig und können deutlich häufiger getaktet werden als
-Discovery. Vor jedem Orderbook-Run prüft der Collector, ob kein Discovery-Run
-gerade `running` ist und ob der letzte `completed` oder `partial` Discovery-Run
-maximal 24 Stunden alt ist. Wenn diese Readiness fehlt, wird ohne
-`orderbook_collection_runs` Eintrag geskippt.
-
-## Datenmodell
-
-| Tabelle/View | Zweck |
+| Bereich | Tabellen |
 | --- | --- |
-| `polymarket_conditions` | Eine Zeile pro `condition_id` |
-| `polymarket_tokens` | Eine Zeile pro handelbarem Outcome-Token |
-| `market_discovery_runs` | Generische Discovery-Run-Metadaten |
-| `market_discovery_observations` | Append-only Strategy-/Source-Beobachtungen |
-| `manual_watchlist_items` | Manuell gepinnte oder temporär beobachtete Markets |
-| `market_exclusions` | Temporäre oder dauerhafte Exclusions |
-| `polymarket_watchlist_v` | Token-level Collection Universe |
-| `orderbook_collection_runs` | Audit-Run der Orderbook Collection |
-| `orderbook_collection_items` | Snapshot der Watchlist vor dem Fetch |
-| `orderbook_snapshots` | Parsed CLOB Orderbooks und Validierung |
+| Discovery | `market_discovery_runs`, `market_discovery_strategy_runs`, `whale_snapshots`, `market_discovery_observations` |
+| Registry | `market_registry_sync_runs`, `polymarket_markets`, `polymarket_tokens`, `market_status_snapshots` |
+| Orderbooks | `orderbook_collection_runs`, `orderbook_collection_items`, `orderbook_snapshots` |
 
-Orderbook Collection liest ausschließlich:
-
-```sql
-SELECT token_id
-FROM polymarket_watchlist_v
-WHERE collect_orderbook = true;
-```
-
-Vor jedem API-Fetch wird diese View in `orderbook_collection_items` gesnapshottet.
-Backtests rekonstruieren dadurch, welcher Token wann und warum gesammelt wurde.
-
-## Orderbook Parser
-
-Polymarket CLOB liefert Bids low-to-high und Asks high-to-low. Der Parser nutzt
-deshalb:
-
-```text
-best_bid = max(bids.price)
-best_ask = min(asks.price)
-```
-
-Ungültige Books werden mit `valid_orderbook = false` und `invalid_reason`
-persistiert. Backtests sollen nur `valid_orderbook = true` verwenden.
-
-## Konfiguration
-
-Settings kommen aus Environment-Variablen oder `.env`.
-
-Wichtige Variablen:
-
-```text
-POLYMARKET_WATCHLIST_POSTGRES_DB
-POLYMARKET_WATCHLIST_POSTGRES_USER
-POLYMARKET_WATCHLIST_POSTGRES_PASSWORD
-POLYMARKET_WATCHLIST_POSTGRES_HOST
-POLYMARKET_WATCHLIST_POSTGRES_PORT
-POLYMARKET_WATCHLIST_LOG_LEVEL
-
-POLYMARKET_DATA_API_BASE_URL
-POLYMARKET_DATA_API_TIMEOUT_SECONDS
-POLYMARKET_DATA_API_MAX_CONCURRENT_REQUESTS
-POLYMARKET_DATA_API_REQUEST_DELAY_SECONDS
-POLYMARKET_DATA_API_RATE_LIMIT_RETRY_ATTEMPTS
-POLYMARKET_DATA_API_RATE_LIMIT_BACKOFF_SECONDS
-POLYMARKET_DATA_API_REQUESTS_PER_SECOND
-POLYMARKET_POSITIONS_REQUESTS_PER_SECOND
-POLYMARKET_LEADERBOARD_REQUESTS_PER_SECOND
-POLYMARKET_CLOB_API_BASE_URL
-POLYMARKET_ORDERBOOK_REQUESTS_PER_SECOND
-```
-
-## Entwicklung
-
-Tests:
-
-```bash
-pytest
-```
-
-Ruff:
-
-```bash
-ruff check .
-```
-
-Projektstruktur:
-
-```text
-src/vl_polymarket_watchlist/cli.py                 CLI und Scheduler
-src/vl_polymarket_watchlist/core/db/               SQLAlchemy, Alembic
-src/vl_polymarket_watchlist/polymarket/            Polymarket API Client und Params
-src/vl_polymarket_watchlist/markets/               Registry, Watchlist-Daten, Discovery
-src/vl_polymarket_watchlist/orderbooks/            Collection, Parser, Persistence
-tests/                                             Unit- und Integrationstests
-```
+Dies ist eine neue Datenbank-Baseline. Alte Watchlist-Tabellen oder Views werden
+nicht migriert. Der neue Compose-Stack verwendet deshalb ein eigenes Volume.

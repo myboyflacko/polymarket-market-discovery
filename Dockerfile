@@ -11,4 +11,4 @@ COPY src ./src
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir .
 
-CMD ["vl-polymarket-watchlist", "schedule"]
+CMD ["polymarket-market-discovery", "schedule", "all"]

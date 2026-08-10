@@ -1,123 +1,73 @@
 import asyncio
-import logging
+from contextlib import contextmanager
 from datetime import UTC, datetime
 
-from vl_polymarket_watchlist.orderbooks import service
-from vl_polymarket_watchlist.orderbooks.domain import (
-    OrderBookCollectionItemPayload,
-    OrderbookReadiness,
-)
+from polymarket_market_discovery.orderbooks import service
+from polymarket_market_discovery.orderbooks.domain import OrderBookCollectionItemPayload
 
 
-NOW = datetime(2026, 6, 1, tzinfo=UTC)
+NOW = datetime(2026, 8, 10, tzinfo=UTC)
 
 
-def test_orderbook_service_skips_before_creating_run(monkeypatch, caplog) -> None:
-    monkeypatch.setattr(
-        service,
-        "get_orderbook_readiness",
-        lambda *, now, max_age_hours: OrderbookReadiness(
-            ready=False,
-            reason="no_completed_discovery_run",
-        ),
-    )
+@contextmanager
+def acquired_lock():
+    yield True
 
-    def fail_create_run(**kwargs):
-        raise AssertionError("orderbook run should not be created")
 
-    monkeypatch.setattr(service, "create_orderbook_collection_run", fail_create_run)
+@contextmanager
+def busy_lock():
+    yield False
 
-    with caplog.at_level(logging.INFO):
-        result = asyncio.run(service.OrderbookCollectionService().run(now=NOW))
+
+def test_orderbooks_skip_when_pipeline_is_locked(monkeypatch) -> None:
+    monkeypatch.setattr(service, "pipeline_lock", busy_lock)
+
+    result = asyncio.run(service.OrderbookCollectionService().run(now=NOW))
 
     assert result.status == "skipped"
-    assert result.run_id is None
-    assert result.skip_reason == "no_completed_discovery_run"
-    assert caplog.records[0].event == "service.skipped"
-    assert caplog.records[0].context == {
-        "service": "orderbooks",
-        "reason": "no_completed_discovery_run",
-    }
+    assert result.skip_reason == "pipeline_locked"
 
 
-def test_orderbook_service_logs_batch_load_failure(monkeypatch, caplog) -> None:
+def test_orderbooks_count_each_failed_token(monkeypatch) -> None:
     class FailingClient:
         async def get_order_books(self, params):
             raise RuntimeError("clob unavailable")
 
-    _stub_ready_collection(monkeypatch, [_item("token-1")])
+    monkeypatch.setattr(service, "pipeline_lock", acquired_lock)
+    monkeypatch.setattr(service, "recover_orphaned_runs", lambda **kwargs: None)
+    monkeypatch.setattr(
+        service, "create_orderbook_collection_run", lambda **kwargs: None
+    )
     monkeypatch.setattr(
         service,
-        "get_polymarket_data_client",
-        lambda: FailingClient(),
+        "snapshot_collectable_markets",
+        lambda **kwargs: [_item("yes"), _item("no")],
     )
+    monkeypatch.setattr(service, "get_polymarket_client", lambda: FailingClient())
+    captured: dict = {}
 
-    with caplog.at_level(logging.WARNING):
-        result = asyncio.run(service.OrderbookCollectionService().run(now=NOW))
+    def complete(**kwargs):
+        captured.update(kwargs)
+        return "failed"
+
+    monkeypatch.setattr(service, "complete_orderbook_collection_run", complete)
+
+    result = asyncio.run(service.OrderbookCollectionService(batch_size=50).run(now=NOW))
 
     assert result.status == "failed"
-    assert result.failure_count == 1
-    assert caplog.records[0].event == "orderbook.load_failed"
-    assert caplog.records[0].context == {
-        "run_id": "20260601T000000000000Z-orderbooks",
-        "token_ids": ["token-1"],
-        "reason": "batch_request_failed",
-        "error": "clob unavailable",
+    assert result.selected_token_count == 2
+    assert result.failure_count == 2
+    assert captured["errors_by_token"] == {
+        "yes": "clob unavailable",
+        "no": "clob unavailable",
     }
-
-
-def test_orderbook_service_logs_missing_payload(monkeypatch, caplog) -> None:
-    class EmptyClient:
-        async def get_order_books(self, params):
-            return []
-
-    _stub_ready_collection(monkeypatch, [_item("token-1")])
-    monkeypatch.setattr(
-        service,
-        "get_polymarket_data_client",
-        lambda: EmptyClient(),
-    )
-
-    with caplog.at_level(logging.WARNING):
-        result = asyncio.run(service.OrderbookCollectionService().run(now=NOW))
-
-    assert result.status == "failed"
-    assert result.failure_count == 1
-    assert caplog.records[0].event == "orderbook.load_failed"
-    assert caplog.records[0].context == {
-        "run_id": "20260601T000000000000Z-orderbooks",
-        "token_id": "token-1",
-        "reason": "missing_payload",
-    }
-
-
-def _stub_ready_collection(monkeypatch, items):
-    monkeypatch.setattr(
-        service,
-        "get_orderbook_readiness",
-        lambda *, now, max_age_hours: OrderbookReadiness(ready=True),
-    )
-    monkeypatch.setattr(service, "create_orderbook_collection_run", lambda **kwargs: None)
-    monkeypatch.setattr(
-        service,
-        "snapshot_collectable_watchlist",
-        lambda *, run_id, selected_at: items,
-    )
-    monkeypatch.setattr(
-        service,
-        "persist_orderbook_snapshots",
-        lambda *, run_id, snapshots: None,
-    )
-    monkeypatch.setattr(
-        service,
-        "complete_orderbook_collection_run",
-        lambda **kwargs: None,
-    )
 
 
 def _item(token_id: str) -> OrderBookCollectionItemPayload:
     return OrderBookCollectionItemPayload(
         condition_id="condition-1",
         token_id=token_id,
+        outcome=token_id.title(),
+        market_status_checked_at=NOW,
         selected_at=NOW,
     )
