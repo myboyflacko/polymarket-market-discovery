@@ -9,12 +9,8 @@ from sqlalchemy import engine_from_config, pool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from polymarket_market_discovery.core.db.base import Base
 from polymarket_market_discovery.core.db.engine import get_database_url
-from polymarket_market_discovery.core.db import models as db_models
-
-
-_ = db_models
+from polymarket_market_discovery.core.db.models import Base
 
 
 config = context.config

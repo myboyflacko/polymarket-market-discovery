@@ -42,7 +42,7 @@ def upgrade() -> None:
         ),
     )
     op.create_table(
-        "market_discovery_strategy_runs",
+        "market_discovery_observations",
         sa.Column("id", BIGINT_PK, primary_key=True, autoincrement=True),
         sa.Column(
             "discovery_run_id",
@@ -50,53 +50,7 @@ def upgrade() -> None:
             sa.ForeignKey("market_discovery_runs.run_id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("strategy", sa.String(), nullable=False),
-        sa.Column("strategy_version", sa.String(), nullable=False),
-        sa.Column("status", sa.String(), nullable=False),
-        sa.Column("started_at", sa.DateTime(timezone=True)),
-        sa.Column("finished_at", sa.DateTime(timezone=True)),
-        sa.Column("checked_count", sa.Integer(), nullable=False),
-        sa.Column("observation_count", sa.Integer(), nullable=False),
-        sa.Column("config_json", sa.JSON(), nullable=False),
-        sa.Column("error_message", sa.Text()),
-        sa.UniqueConstraint(
-            "discovery_run_id", "strategy", name="uq_strategy_run_strategy"
-        ),
-    )
-    op.create_table(
-        "whale_snapshots",
-        sa.Column("id", BIGINT_PK, primary_key=True, autoincrement=True),
-        sa.Column(
-            "strategy_run_id",
-            BIGINT_PK,
-            sa.ForeignKey("market_discovery_strategy_runs.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column("proxy_wallet", sa.String(), nullable=False),
-        sa.Column("pnl_rank", sa.Integer(), nullable=False),
-        sa.Column("volume_rank", sa.Integer(), nullable=False),
-        sa.Column("pnl", sa.Numeric(), nullable=False),
-        sa.Column("volume", sa.Numeric(), nullable=False),
-        sa.Column("observed_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("raw_payload", sa.JSON(), nullable=False),
-        sa.UniqueConstraint(
-            "strategy_run_id", "proxy_wallet", name="uq_whale_strategy_wallet"
-        ),
-    )
-    op.create_table(
-        "market_discovery_observations",
-        sa.Column("id", BIGINT_PK, primary_key=True, autoincrement=True),
-        sa.Column(
-            "strategy_run_id",
-            BIGINT_PK,
-            sa.ForeignKey("market_discovery_strategy_runs.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column(
-            "whale_snapshot_id",
-            BIGINT_PK,
-            sa.ForeignKey("whale_snapshots.id", ondelete="CASCADE"),
-        ),
+        sa.Column("proxy_wallet", sa.String()),
         sa.Column("condition_id", sa.String(), nullable=False),
         sa.Column("held_token_id", sa.String(), nullable=False),
         sa.Column("opposite_token_id", sa.String(), nullable=False),
@@ -119,9 +73,9 @@ def upgrade() -> None:
         ["condition_id", "observed_at"],
     )
     op.create_index(
-        "ix_discovery_observations_strategy_run",
+        "ix_discovery_observations_discovery_run",
         "market_discovery_observations",
-        ["strategy_run_id"],
+        ["discovery_run_id"],
     )
 
     op.create_table(
@@ -336,6 +290,4 @@ def downgrade() -> None:
     op.drop_table("polymarket_markets")
     op.drop_table("market_registry_sync_runs")
     op.drop_table("market_discovery_observations")
-    op.drop_table("whale_snapshots")
-    op.drop_table("market_discovery_strategy_runs")
     op.drop_table("market_discovery_runs")

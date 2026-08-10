@@ -9,9 +9,9 @@ Orders, führt keine Trades aus und bewegt keine Funds.
 
 ## Pipeline
 
-1. **Discovery** speichert jeden Strategy-Run, Whale-Snapshot und jede Position
-   append-only. Die erste Strategie nimmt die Schnittmenge der Top-25 DAY/OVERALL
-   Leaderboards für PnL und Volume.
+1. **Discovery** speichert jeden Discovery-Run und jede Position append-only. Die
+   erste Strategie nimmt die Schnittmenge der Top-25 DAY/OVERALL Leaderboards für
+   PnL und Volume.
 2. **Market Registry** dedupliziert über `condition_id` und aktualisiert Status,
    Enddatum sowie beide Outcome-Tokens über Gamma. Neue, unbekannte und alle noch
    nicht terminalen Märkte werden erneut geprüft.
@@ -53,7 +53,7 @@ Orderbook-Sammlung nicht gleichzeitig schreiben.
 
 | Bereich | Tabellen |
 | --- | --- |
-| Discovery | `market_discovery_runs`, `market_discovery_strategy_runs`, `whale_snapshots`, `market_discovery_observations` |
+| Discovery | `market_discovery_runs`, `market_discovery_observations` |
 | Registry | `market_registry_sync_runs`, `polymarket_markets`, `polymarket_tokens`, `market_status_snapshots` |
 | Orderbooks | `orderbook_collection_runs`, `orderbook_collection_items`, `orderbook_snapshots` |
 
