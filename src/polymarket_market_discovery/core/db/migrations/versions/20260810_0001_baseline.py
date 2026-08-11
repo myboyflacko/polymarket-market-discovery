@@ -28,11 +28,10 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("finished_at", sa.DateTime(timezone=True)),
         sa.Column("strategies", sa.JSON(), nullable=False),
-        sa.Column("checked_wallet_count", sa.Integer(), nullable=False),
+        sa.Column("strategy_log", sa.JSON(), nullable=False),
         sa.Column("observation_count", sa.Integer(), nullable=False),
         sa.Column("discovered_market_count", sa.Integer(), nullable=False),
         sa.Column("registry_synced_at", sa.DateTime(timezone=True)),
-        sa.Column("config_json", sa.JSON(), nullable=False),
         sa.Column("error_message", sa.Text()),
         sa.Column(
             "created_at",

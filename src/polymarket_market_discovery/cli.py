@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from polymarket_market_discovery.core.logging import configure_logging
-from polymarket_market_discovery.markets.discovery.registry import (
+from polymarket_market_discovery.discovery.registry import (
     available_strategy_names,
     build_strategies,
 )
 
 if TYPE_CHECKING:
-    from polymarket_market_discovery.markets.discovery.service import (
+    from polymarket_market_discovery.discovery.service import (
         MarketDiscoveryService,
     )
     from polymarket_market_discovery.markets.service import MarketRegistryService
@@ -180,7 +180,7 @@ async def scheduled_runner(
 def build_discovery_service(
     strategy_names: list[str] | None,
 ) -> MarketDiscoveryService:
-    from polymarket_market_discovery.markets.discovery.service import (
+    from polymarket_market_discovery.discovery.service import (
         MarketDiscoveryService,
     )
 

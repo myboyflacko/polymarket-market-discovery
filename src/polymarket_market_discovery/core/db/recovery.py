@@ -7,7 +7,6 @@ from sqlalchemy import select, update
 from polymarket_market_discovery.core.db.engine import database_session
 from polymarket_market_discovery.core.db.models import (
     MarketDiscoveryRun,
-    MarketDiscoveryStrategyRun,
     MarketRegistrySyncRun,
     OrderbookCollectionItem,
     OrderbookCollectionRun,
@@ -22,24 +21,24 @@ def recover_orphaned_runs(*, recovered_at: datetime) -> None:
     """Fail stale running rows after the process-level lock has been acquired."""
     recovered_at = ensure_utc(recovered_at)
     with database_session() as session:
-        session.execute(
-            update(MarketDiscoveryStrategyRun)
-            .where(MarketDiscoveryStrategyRun.status.in_(("pending", "running")))
-            .values(
-                status="failed",
-                finished_at=recovered_at,
-                error_message=ORPHANED_RUN_ERROR,
-            )
-        )
-        session.execute(
-            update(MarketDiscoveryRun)
-            .where(MarketDiscoveryRun.status == "running")
-            .values(
-                status="failed",
-                finished_at=recovered_at,
-                error_message=ORPHANED_RUN_ERROR,
-            )
-        )
+        discovery_runs = session.scalars(
+            select(MarketDiscoveryRun).where(MarketDiscoveryRun.status == "running")
+        ).all()
+        for run in discovery_runs:
+            run.strategy_log = [
+                {
+                    **entry,
+                    "status": "failed",
+                    "finished_at": recovered_at.isoformat(),
+                    "error_message": ORPHANED_RUN_ERROR,
+                }
+                if entry.get("status") == "running"
+                else entry
+                for entry in run.strategy_log
+            ]
+            run.status = "failed"
+            run.finished_at = recovered_at
+            run.error_message = ORPHANED_RUN_ERROR
         session.execute(
             update(MarketRegistrySyncRun)
             .where(MarketRegistrySyncRun.status == "running")
