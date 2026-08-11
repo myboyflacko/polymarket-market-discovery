@@ -41,14 +41,14 @@ class WhaleLeaderboardIntersectionStrategy(BaseMarketDiscoveryStrategy):
         generated_at: datetime,
     ) -> StrategyDiscoveryResult:
         pnl_wallets, volume_wallets = await asyncio.gather(
-            fetch_leaderboard(client=client, strategy=self, order_by="PNL"),
-            fetch_leaderboard(client=client, strategy=self, order_by="VOL"),
+            _fetch_leaderboard(client=client, strategy=self, order_by="PNL"),
+            _fetch_leaderboard(client=client, strategy=self, order_by="VOL"),
         )
-        wallets = select_intersection_wallets(
+        wallets = _select_intersection_wallets(
             pnl_wallets=pnl_wallets,
             volume_wallets=volume_wallets,
         )
-        observations = await collect_wallet_positions(
+        observations = await _collect_wallet_positions(
             client=client,
             wallets=wallets,
             observed_at=generated_at,
@@ -61,7 +61,7 @@ class WhaleLeaderboardIntersectionStrategy(BaseMarketDiscoveryStrategy):
         )
 
 
-async def fetch_leaderboard(
+async def _fetch_leaderboard(
     *,
     client: PolymarketClient,
     strategy: WhaleLeaderboardIntersectionStrategy,
@@ -88,7 +88,7 @@ async def fetch_leaderboard(
         for row in page:
             if not isinstance(row, dict):
                 raise ValueError(f"{order_by} leaderboard row must be an object")
-            wallet = parse_leaderboard_wallet(row)
+            wallet = _parse_leaderboard_wallet(row)
             if wallet in seen_wallets:
                 continue
             seen_wallets.add(wallet)
@@ -103,14 +103,14 @@ async def fetch_leaderboard(
     return wallets
 
 
-def parse_leaderboard_wallet(row: dict[str, Any]) -> str:
-    wallet = required_string(row, "proxyWallet").lower()
+def _parse_leaderboard_wallet(row: dict[str, Any]) -> str:
+    wallet = _required_string(row, "proxyWallet").lower()
     if len(wallet) != 42 or not wallet.startswith("0x"):
         raise ValueError("leaderboard proxyWallet must be a 0x-prefixed address")
     return wallet
 
 
-def select_intersection_wallets(
+def _select_intersection_wallets(
     *,
     pnl_wallets: list[str],
     volume_wallets: list[str],
@@ -119,7 +119,7 @@ def select_intersection_wallets(
     return [wallet for wallet in pnl_wallets if wallet in volume_wallet_set]
 
 
-async def collect_wallet_positions(
+async def _collect_wallet_positions(
     *,
     client: PolymarketClient,
     wallets: list[str],
@@ -127,7 +127,7 @@ async def collect_wallet_positions(
 ) -> list[MarketDiscoveryObservationPayload]:
     results = await asyncio.gather(
         *[
-            collect_single_wallet_positions(
+            _collect_single_wallet_positions(
                 client=client,
                 wallet=wallet,
                 observed_at=observed_at,
@@ -138,7 +138,7 @@ async def collect_wallet_positions(
     return [observation for result in results for observation in result]
 
 
-async def collect_single_wallet_positions(
+async def _collect_single_wallet_positions(
     *,
     client: PolymarketClient,
     wallet: str,
@@ -165,7 +165,7 @@ async def collect_single_wallet_positions(
             if not isinstance(row, dict):
                 raise ValueError(f"position row for {wallet} must be an object")
             observations.append(
-                normalize_position_observation(
+                _normalize_position_observation(
                     row=row,
                     wallet=wallet,
                     observed_at=observed_at,
@@ -178,7 +178,7 @@ async def collect_single_wallet_positions(
     return observations
 
 
-def normalize_position_observation(
+def _normalize_position_observation(
     *,
     row: dict[str, Any],
     wallet: str,
@@ -186,42 +186,42 @@ def normalize_position_observation(
 ) -> MarketDiscoveryObservationPayload:
     return MarketDiscoveryObservationPayload(
         proxy_wallet=wallet,
-        condition_id=required_string(row, "conditionId"),
-        held_token_id=required_string(row, "asset"),
-        opposite_token_id=required_string(row, "oppositeAsset"),
-        outcome=required_string(row, "outcome"),
-        opposite_outcome=required_string(row, "oppositeOutcome"),
-        position_size=required_decimal(row, "size"),
-        current_value=required_decimal(row, "currentValue"),
-        title=optional_string(row.get("title")),
-        slug=optional_string(row.get("slug")),
-        event_id=optional_string(row.get("eventId")),
-        event_slug=optional_string(row.get("eventSlug")),
-        end_date=optional_datetime(row.get("endDate")),
+        condition_id=_required_string(row, "conditionId"),
+        held_token_id=_required_string(row, "asset"),
+        opposite_token_id=_required_string(row, "oppositeAsset"),
+        outcome=_required_string(row, "outcome"),
+        opposite_outcome=_required_string(row, "oppositeOutcome"),
+        position_size=_required_decimal(row, "size"),
+        current_value=_required_decimal(row, "currentValue"),
+        title=_optional_string(row.get("title")),
+        slug=_optional_string(row.get("slug")),
+        event_id=_optional_string(row.get("eventId")),
+        event_slug=_optional_string(row.get("eventSlug")),
+        end_date=_optional_datetime(row.get("endDate")),
         observed_at=observed_at,
         raw_payload=row,
     )
 
 
-def required_string(row: dict[str, Any], key: str) -> str:
+def _required_string(row: dict[str, Any], key: str) -> str:
     value = row.get(key)
     if value is None or str(value) == "":
         raise ValueError(f"missing required field {key}")
     return str(value)
 
 
-def required_decimal(row: dict[str, Any], key: str) -> Decimal:
+def _required_decimal(row: dict[str, Any], key: str) -> Decimal:
     try:
-        return Decimal(required_string(row, key))
+        return Decimal(_required_string(row, key))
     except (InvalidOperation, ValueError) as exc:
         raise ValueError(f"invalid decimal field {key}") from exc
 
 
-def optional_string(value: Any) -> str | None:
+def _optional_string(value: Any) -> str | None:
     return None if value is None or str(value) == "" else str(value)
 
 
-def optional_datetime(value: Any) -> datetime | None:
+def _optional_datetime(value: Any) -> datetime | None:
     if value is None or str(value) == "":
         return None
     text = str(value)
