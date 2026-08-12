@@ -19,7 +19,7 @@ Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung änd
 ## Arbeitsstandard
 
 - Nur ändern, was direkt zur Aufgabe gehört; keine Nebenbei-Refactors oder spekulativen Features.
-- Code mit `pytest` testen und mit `ruff check .` linten. Nicht ausgeführte Checks kurz begründen. Run Package mit `uv run`
+- Code mit `pytest` testen und mit `ruff check .` linten. Nicht ausgeführte Checks kurz begründen. Run Package mit `uv run`.
 - Vor Abschluss den Diff prüfen und offene Arbeiten oder Risiken benennen.
 - Kein verbose Output ohne explizite Aufforderung; nur relevante Ergebnisse berichten.
 - Die Final Response enthält `Geändert`, `Offen`, `Risiken` und, falls vorhanden, `Commit`.
