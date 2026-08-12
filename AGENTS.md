@@ -15,14 +15,6 @@
 
 Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung ändert, muss der Projektindex in derselben Änderung aktualisiert werden.
 
-## Agent-Routing
-
-Der Main-Thread routet Aufgaben und Subagent-Outputs wie folgt:
-
-- Linear-Issue → `workpackage_coordinator`
-- `PACKAGES_READY` → `engineer`
-- `HANDOFF_READY` → `reviewer`
-- `CHANGES_REQUESTED` → `engineer`
 
 ## Arbeitsstandard
 
