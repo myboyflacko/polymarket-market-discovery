@@ -59,3 +59,53 @@ Orderbook-Sammlung nicht gleichzeitig schreiben.
 
 Dies ist eine neue Datenbank-Baseline. Alte Watchlist-Tabellen oder Views werden
 nicht migriert. Der neue Compose-Stack verwendet deshalb ein eigenes Volume.
+
+## CI und lokale Checks
+
+Pull Requests auf `dev` sowie Pull Requests von `dev` auf `main` durchlaufen die
+GitHub-Actions-Pipeline `Pull request CI`. Draft-PRs werden erst beim Wechsel auf
+„Ready for review“ geprüft. Ein anderer Quellbranch für `main` scheitert bereits
+an der Quellbranch-Prüfung. Der Workflow benötigt keine Secrets und veröffentlicht
+weder Packages noch Container-Images.
+
+Die Python-Prüfungen lassen sich lokal mit Python 3.12 ausführen:
+
+```bash
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install pip==26.1.2
+python -m pip install ".[dev,ci]"
+pytest
+ruff check .
+ruff format --check .
+python -m build
+python -m twine check dist/*
+python -m venv /tmp/polymarket-package-smoke
+/tmp/polymarket-package-smoke/bin/python -m pip install pip==26.1.2
+/tmp/polymarket-package-smoke/bin/python -m pip install dist/*.whl
+/tmp/polymarket-package-smoke/bin/polymarket-market-discovery --help
+python -m pip_audit .
+```
+
+Die Docker-Prüfungen bauen und starten ausschließlich lokale Images. Der Smoke-Test
+deaktiviert das Netzwerk und verwendet ein schreibgeschütztes Root-Dateisystem:
+
+```bash
+docker compose config --quiet
+docker build --tag polymarket-market-discovery:ci .
+docker compose build scheduler cli
+docker run --rm --network none --read-only --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --entrypoint polymarket-market-discovery \
+  polymarket-market-discovery:ci --help
+trivy image --exit-code 1 --ignore-unfixed \
+  --severity HIGH,CRITICAL polymarket-market-discovery:ci
+```
+
+Für `dev` und `main` muss die Repository-Ruleset bzw. Branch Protection den Check
+`Pull request CI / CI` als Required Status Check verlangen. Für beide Branches
+werden Pull Requests erzwungen und Bypasses deaktiviert. Auf `main` sind direkte
+Pushes gesperrt; der Required Check akzeptiert wegen der Quellbranch-Prüfung nur
+`dev` als PR-Quelle. Beim erstmaligen Rollout wird der Workflow zuerst nach `dev`
+gemergt, anschließend einmal per `dev`-PR nach `main` übernommen und erst danach
+auf beiden Branches als Required Status Check aktiviert.

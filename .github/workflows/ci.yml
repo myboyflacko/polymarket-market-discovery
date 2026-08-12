@@ -1,0 +1,168 @@
+name: Pull request CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  validate-source:
+    name: Validate PR source
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Accept dev targets and dev-to-main promotions
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$BASE_REF" == "dev" ]]; then
+            exit 0
+          fi
+          if [[ "$BASE_REF" == "main" && "$HEAD_REF" == "dev" ]]; then
+            exit 0
+          fi
+          echo "Only pull requests from dev may target main." >&2
+          exit 1
+
+  python-quality:
+    name: Python quality
+    needs: validate-source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install project with development dependencies
+        run: |
+          python -m pip install pip==26.1.2
+          python -m pip install ".[dev]"
+      - name: Test
+        run: pytest
+      - name: Lint
+        run: ruff check .
+      - name: Check formatting
+        run: ruff format --check .
+
+  python-package:
+    name: Python package
+    needs: validate-source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install packaging tools
+        run: |
+          python -m pip install pip==26.1.2
+          python -m pip install ".[ci]"
+      - name: Build and validate distributions
+        run: |
+          python -m build
+          python -m twine check dist/*
+      - name: Install wheel in a clean environment
+        run: |
+          python -m venv /tmp/polymarket-package-smoke
+          /tmp/polymarket-package-smoke/bin/python -m pip install pip==26.1.2
+          /tmp/polymarket-package-smoke/bin/python -m pip install dist/*.whl
+          /tmp/polymarket-package-smoke/bin/polymarket-market-discovery --help
+
+  dependency-audit:
+    name: Python dependency audit
+    needs: validate-source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Audit project dependencies
+        run: |
+          python -m pip install pip==26.1.2 pip-audit==2.10.1
+          python -m pip_audit .
+
+  docker:
+    name: Docker and container security
+    needs: validate-source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Build Dockerfile
+        run: docker build --tag polymarket-market-discovery:ci .
+      - name: Build scheduler and CLI Compose images
+        run: docker compose build scheduler cli
+      - name: Run read-only CLI smoke test
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --entrypoint polymarket-market-discovery \
+            polymarket-market-discovery:ci --help
+      - name: Scan image for known vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: polymarket-market-discovery:ci
+          version: v0.72.0
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+  ci:
+    name: CI
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
+    needs:
+      - validate-source
+      - python-quality
+      - python-package
+      - dependency-audit
+      - docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every CI job to pass
+        env:
+          VALIDATE_SOURCE: ${{ needs.validate-source.result }}
+          PYTHON_QUALITY: ${{ needs.python-quality.result }}
+          PYTHON_PACKAGE: ${{ needs.python-package.result }}
+          DEPENDENCY_AUDIT: ${{ needs.dependency-audit.result }}
+          DOCKER: ${{ needs.docker.result }}
+        run: |
+          for result in \
+            "$VALIDATE_SOURCE" \
+            "$PYTHON_QUALITY" \
+            "$PYTHON_PACKAGE" \
+            "$DEPENDENCY_AUDIT" \
+            "$DOCKER"; do
+            [[ "$result" == "success" ]] || exit 1
+          done
