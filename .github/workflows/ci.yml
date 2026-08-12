@@ -62,8 +62,10 @@ jobs:
       - name: Test
         run: pytest
       - name: Lint
+        if: always()
         run: ruff check .
       - name: Check formatting
+        if: always()
         run: ruff format --check .
 
   python-package:

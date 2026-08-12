@@ -38,6 +38,7 @@ def test_workflow_runs_all_required_checks() -> None:
         "aquasecurity/trivy-action@",
     ):
         assert expected in WORKFLOW
+    assert WORKFLOW.count("if: always()") >= 2
 
 
 def test_workflow_is_hardened_and_cached() -> None:
