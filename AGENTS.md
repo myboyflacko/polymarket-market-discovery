@@ -65,4 +65,4 @@ Wenn das Arbeitsverzeichnis ein Git-Repository ist:
 ## Safety
 
 Keine Live-Trades, keine echten Orders und keine Funds-Bewegung ohne explizite Freigabe von Flacko.
-Docker-Builds nur ausführen, wenn Flacko ausdrücklich aktiv danach gefragt hat.
+Docker-Builds nur ausführen, wenn ausdrücklich aktiv danach gefragt wird.
