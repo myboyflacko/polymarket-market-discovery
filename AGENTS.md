@@ -1,59 +1,36 @@
-Codex ist Flackos Senior-Developer-Partner: ruhig, erfahren, praktisch und erklärend.
+# Projekt
 
-Codex soll:
+`polymarket-market-discovery` ist ein Python-3.12-Service, der Polymarket-Märkte entdeckt, ein kanonisches Market-Universum pflegt und Orderbook-Historie sammelt. Der Service verwendet ausschließlich öffentliche Read-Endpunkte.
 
-- wie ein Senior Developer arbeiten, der beim Bauen auch lehrt,
-- einfache, verständliche Lösungen bevorzugen,
-- komplexe Aufgaben in kleine nachvollziehbare Schritte zerlegen,
-- unkonventionell denken, aber nicht unnötig verkomplizieren,
-- Flacko beim Lernen unterstützen, statt nur fertigen Code abzuliefern.
+## Projektindex
 
-## Kommunikationsstil
+- `src/polymarket_market_discovery/cli.py`: CLI-Einstieg für Runs, Scheduling und Datenbank-Setup
+- `src/polymarket_market_discovery/settings.py` und `core/`: Konfiguration, Logging, Datenbank und Migrationen
+- `src/polymarket_market_discovery/markets/discovery/`: Discovery-Runs, Strategien und Beobachtungen
+- `src/polymarket_market_discovery/markets/`: kanonische Market Registry
+- `src/polymarket_market_discovery/orderbooks/`: Orderbook-Abruf und Speicherung
+- `src/polymarket_market_discovery/polymarket/`: externe Polymarket-API-Grenze
+- `tests/`: nach den Source-Domains strukturierte Tests
+- `README.md`, `pyproject.toml`, `docker-compose.yml` und `Makefile`: Betrieb, Abhängigkeiten und lokale Kommandos
 
-- Antworten kurz, knapp und informativ halten.
-- Nur ausführlicher erklären, wenn Flacko explizit um Erklärung, Hintergrund oder Details bittet.
-- Keine unnötigen Wiederholungen, langen Zusammenfassungen oder ausufernden Begründungen.
-- Final Answers standardmäßig auf drei Punkte begrenzen: geändert, verifiziert, offen.
-- Wenn nichts offen ist, explizit kurz sagen: `Offen: nichts`.
+Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung ändert, muss der Projektindex in derselben Änderung aktualisiert werden.
+
+## Agent-Routing
+
+Der Main-Thread routet Aufgaben und Subagent-Outputs wie folgt:
+
+- Linear-Issue → `workpackage_coordinator`
+- `PACKAGES_READY` → `engineer`
+- `HANDOFF_READY` → `reviewer`
+- `CHANGES_REQUESTED` → `engineer`
 
 ## Arbeitsstandard
 
-Core behavior:
-
-- Aufgabe zuerst verstehen: Goal, Kontext, Scope, Constraints und Definition of Done klären.
-- Relevante Annahmen sichtbar machen; fragen, wenn Ambiguität die Umsetzung verändern würde.
-- Tradeoffs benennen und unnötige Komplexität aktiv zurückweisen.
-- Simple, kleine, testbare Schritte bevorzugen.
-- Nur ändern, was direkt zur Aufgabe gehört.
-- Keine Nebenbei-Refactors und keine spekulativen Features.
-- Orphans nur entfernen, wenn sie durch die eigene Änderung entstanden sind.
-- Bei mehrstufiger Arbeit kurze `Step -> Verify`-Checkpoints definieren und bis verifiziert oder blockiert weiterarbeiten.
-
-Definition of Done:
-
-- Änderung ist umgesetzt und der Diff wurde geprüft.
-- Relevante `pytest`-Tests und `ruff`-Checks wurden ausgeführt oder ein klarer Grund genannt, warum nicht.
-- Offene Risiken, Annahmen oder Folgearbeiten werden kurz genannt.
-- Die Aufgabe bleibt klein, thematisch geschlossen und ohne unrelated Changes.
-
-## Python-Standard
-
-Für Python-Arbeit gelten diese Defaults, sofern das Projekt keinen eigenen Standard vorgibt:
-
-- `pytest` für Tests.
-- `ruff` als Standard-Linter.
-- Mypy optional und projektabhängig.
-- Pydantic an Systemgrenzen: API-Input, Config, externe Daten, Agent-Payloads und LLM-/Agent-Tool-Payloads.
-- Type Hints für neue öffentliche Funktionen und Agent-/LLM-Tool-Funktionen.
-- Neuer Code ist erst fertig, wenn relevantes Verhalten getestet ist und bestehende Tests nicht brechen.
-- Tests werden nach Top-Level-Domain strukturiert; keine unsortierte Sammlung in einem einzigen flachen Test-Ordner, wenn klare Domains erkennbar sind.
-
-## Docstrings
-
-- Agent-/LLM-Tool-Funktionen müssen Google-Style-Docstrings haben.
-- Docstrings sollen Zweck, Args, Returns, Raises und wichtige Side Effects erklären, wenn relevant.
-- Selbsterklärende kleine Helper brauchen keine Docstrings.
-- Code wird dort dokumentiert, wo Verhalten, Constraints oder Entscheidungen nicht offensichtlich sind.
+- Nur ändern, was direkt zur Aufgabe gehört; keine Nebenbei-Refactors oder spekulativen Features.
+- Code mit `pytest` testen und mit `ruff check .` linten. Nicht ausgeführte Checks kurz begründen.
+- Vor Abschluss den Diff prüfen und offene Arbeiten oder Risiken benennen.
+- Kein verbose Output ohne explizite Aufforderung; nur relevante Ergebnisse berichten.
+- Die Final Response enthält `Geändert`, `Offen`, `Risiken` und, falls vorhanden, `Commit`.
 
 ## Gitflow
 
@@ -93,5 +70,6 @@ Wenn das Arbeitsverzeichnis ein Git-Repository ist:
 - Änderungen klein und thematisch halten.
 - Konflikte mit fremden Branches vermeiden; bei Unsicherheit stoppen und fragen.
 
+## Safety
 
 Keine Live-Trades, keine echten Orders und keine Funds-Bewegung ohne explizite Freigabe von Flacko.
