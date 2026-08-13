@@ -4,16 +4,8 @@
 
 ## Projektindex
 
-- `src/polymarket_market_discovery/cli.py`: CLI-Einstieg für Runs, Scheduling und Datenbank-Setup
-- `src/polymarket_market_discovery/settings.py` und `core/`: Konfiguration, Logging, Datenbank und Migrationen
-- `src/polymarket_market_discovery/markets/discovery/`: Discovery-Runs, Strategien und Beobachtungen
-- `src/polymarket_market_discovery/markets/`: kanonische Market Registry
-- `src/polymarket_market_discovery/orderbooks/`: Orderbook-Abruf und Speicherung
-- `src/polymarket_market_discovery/polymarket/`: externe Polymarket-API-Grenze
-- `tests/`: nach den Source-Domains strukturierte Tests
-- `README.md`, `pyproject.toml`, `docker-compose.yml` und `Makefile`: Betrieb, Abhängigkeiten und lokale Kommandos
-
-Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung ändert, muss der Projektindex in derselben Änderung aktualisiert werden.
+Um das Repository zu erkunden oder sich schnell darin zu bewegen, verwende die `INDEX.md` im Repository-Root.
+Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung ändert, muss `INDEX.md` in derselben Änderung aktualisiert werden.
 
 
 ## Arbeitsstandard
