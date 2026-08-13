@@ -4,16 +4,8 @@
 
 ## Projektindex
 
-- `src/polymarket_market_discovery/cli.py`: CLI-Einstieg für Runs, Scheduling und Datenbank-Setup
-- `src/polymarket_market_discovery/settings.py` und `core/`: Konfiguration, Logging, Datenbank und Migrationen
-- `src/polymarket_market_discovery/markets/discovery/`: Discovery-Runs, Strategien und Beobachtungen
-- `src/polymarket_market_discovery/markets/`: kanonische Market Registry
-- `src/polymarket_market_discovery/orderbooks/`: Orderbook-Abruf und Speicherung
-- `src/polymarket_market_discovery/polymarket/`: externe Polymarket-API-Grenze
-- `tests/`: nach den Source-Domains strukturierte Tests
-- `README.md`, `pyproject.toml`, `docker-compose.yml` und `Makefile`: Betrieb, Abhängigkeiten und lokale Kommandos
-
-Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung ändert, muss der Projektindex in derselben Änderung aktualisiert werden.
+Um das Repository zu erkunden oder sich schnell darin zu bewegen, verwende die `INDEX.md` im Repository-Root.
+Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung ändert, muss `INDEX.md` in derselben Änderung aktualisiert werden.
 
 
 ## Arbeitsstandard
@@ -29,9 +21,10 @@ Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung änd
 Wenn das Arbeitsverzeichnis ein Git-Repository ist:
 
 - Nie auf `main` arbeiten oder direkt dorthin pushen. `dev` ist die saubere Startbasis, keine Arbeitsbranch.
-- Zu Beginn Status, Worktrees und Branches prüfen. Passt eine bestehende saubere Arbeitsbranch eindeutig zur Aufgabe, in ihrem Worktree direkt weiterarbeiten.
-- Andernfalls von `dev` eine Branch mit genau einem fachlichen Zweck in einem separaten Worktree anlegen: `feature/*`, `fix/*`, `refactor/*` oder `docs/*`.
-- Ist der `dev`- oder Ziel-Worktree nicht clean oder enthält fachfremde Änderungen, vor dem Bearbeiten Flacko fragen, was damit geschehen soll.
+- Zu Beginn Status und Branches prüfen. Passt eine bestehende saubere Arbeitsbranch eindeutig zur Aufgabe, dort direkt weiterarbeiten.
+- Andernfalls von `dev` eine Branch mit genau einem fachlichen Zweck anlegen: `feature/*`, `fix/*`, `refactor/*` oder `docs/*`. Für sequenzielle und kleine Aufgaben im normalen Arbeitsverzeichnis arbeiten.
+- Separate Worktrees nur verwenden, wenn mehrere Aufgaben oder Agenten parallel arbeiten.
+- Ist `dev` oder die passende Arbeitsbranch nicht clean oder enthält fachfremde Änderungen, vor dem Bearbeiten Flacko fragen, was damit geschehen soll.
 - Nur aufgabenbezogene Änderungen committen; unabhängige Funde lediglich als offene Arbeit melden. Abgeschlossene Änderungen standardmäßig lokal mit einer funktionalen Commit-Message committen.
 - Working Branch pushen und PR erstellen oder aktualisieren nur auf ausdrückliche Anfrage und nach erfolgreichen relevanten Checks.
 
