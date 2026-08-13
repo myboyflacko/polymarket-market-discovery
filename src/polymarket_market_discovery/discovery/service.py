@@ -5,23 +5,25 @@ from datetime import UTC, datetime
 from polymarket_market_discovery.core.db.lock import pipeline_lock
 from polymarket_market_discovery.core.db.recovery import recover_orphaned_runs
 from polymarket_market_discovery.core.time import ensure_utc
-from polymarket_market_discovery.markets.discovery.repository import (
+from polymarket_market_discovery.discovery.domain import (
+    DiscoveryRunResult,
+    StrategyDiscoveryResult,
+)
+from polymarket_market_discovery.discovery.repository import (
     complete_discovery_run,
-    complete_strategy_run,
+    complete_strategy,
     create_discovery_run,
     fail_discovery_run,
-    start_strategy_run,
+    start_strategy,
 )
-from polymarket_market_discovery.markets.domain import (
-    DiscoveryRunResult,
-    MarketDiscoveryStrategy,
-    StrategyDiscoveryResult,
+from polymarket_market_discovery.discovery.strategies.base import (
+    BaseMarketDiscoveryStrategy,
 )
 from polymarket_market_discovery.polymarket.client import get_polymarket_client
 
 
 class MarketDiscoveryService:
-    def __init__(self, *, strategies: list[MarketDiscoveryStrategy]) -> None:
+    def __init__(self, *, strategies: list[BaseMarketDiscoveryStrategy]) -> None:
         if not strategies:
             raise ValueError("At least one discovery strategy is required")
         self.strategies = strategies
@@ -33,7 +35,6 @@ class MarketDiscoveryService:
                 return DiscoveryRunResult(
                     run_id=None,
                     status="skipped",
-                    strategies=[strategy.name for strategy in self.strategies],
                     generated_at=started_at,
                     skip_reason="pipeline_locked",
                 )
@@ -42,25 +43,18 @@ class MarketDiscoveryService:
 
     async def _run_locked(self, *, started_at: datetime) -> DiscoveryRunResult:
         run_id = _build_run_id(started_at)
-        create_discovery_run(
-            run_id=run_id,
-            started_at=started_at,
-            strategies=[
-                (strategy.name, strategy.version, strategy.config())
-                for strategy in self.strategies
-            ],
-        )
+        create_discovery_run(run_id=run_id, started_at=started_at)
         results: list[StrategyDiscoveryResult] = []
         current_strategy: str | None = None
         try:
             client = get_polymarket_client()
             for strategy in self.strategies:
                 current_strategy = strategy.name
-                strategy_started_at = datetime.now(UTC)
-                start_strategy_run(
+                start_strategy(
                     run_id=run_id,
                     strategy=strategy.name,
-                    started_at=strategy_started_at,
+                    version=strategy.version,
+                    started_at=datetime.now(UTC),
                 )
                 result = await strategy.discover(
                     client=client,
@@ -70,12 +64,17 @@ class MarketDiscoveryService:
                     raise ValueError(
                         "Strategy result name does not match registered strategy"
                     )
-                complete_strategy_run(
+                if result.strategy_version != strategy.version:
+                    raise ValueError(
+                        "Strategy result version does not match registered strategy"
+                    )
+                complete_strategy(
                     run_id=run_id,
-                    result=result,
+                    strategy=strategy.name,
                     finished_at=datetime.now(UTC),
                 )
                 results.append(result)
+                current_strategy = None
 
             complete_discovery_run(
                 run_id=run_id,
@@ -95,7 +94,6 @@ class MarketDiscoveryService:
             run_id=run_id,
             status="completed",
             strategies=[result.strategy for result in results],
-            checked_wallet_count=sum(result.checked_count for result in results),
             observation_count=sum(len(result.observations) for result in results),
             discovered_market_count=len(
                 {

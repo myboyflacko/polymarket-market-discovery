@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from polymarket_market_discovery.core.db.base import Base
+from polymarket_market_discovery.core.db.models import Base
 
 
 @pytest.fixture

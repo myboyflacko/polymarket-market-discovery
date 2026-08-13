@@ -58,4 +58,5 @@ Orderbook-Sammlung nicht gleichzeitig schreiben.
 | Orderbooks | `orderbook_collection_runs`, `orderbook_collection_items`, `orderbook_snapshots` |
 
 Dies ist eine neue Datenbank-Baseline. Alte Watchlist-Tabellen oder Views werden
-nicht migriert. Der neue Compose-Stack verwendet deshalb ein eigenes Volume.
+nicht migriert. Bestehende Datenbanken und Compose-Volumes müssen deshalb vor der
+Initialisierung neu erstellt werden.

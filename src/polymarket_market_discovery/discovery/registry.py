@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from polymarket_market_discovery.markets.discovery.strategies.whale_leaderboard import (
+from polymarket_market_discovery.discovery.strategies.base import (
+    BaseMarketDiscoveryStrategy,
+)
+from polymarket_market_discovery.discovery.strategies.whale_leaderboard import (
     WhaleLeaderboardIntersectionStrategy,
 )
-from polymarket_market_discovery.markets.domain import MarketDiscoveryStrategy
 
 
-STRATEGY_FACTORIES = {
+STRATEGY_FACTORIES: dict[str, type[BaseMarketDiscoveryStrategy]] = {
     "whale_leaderboard_intersection": WhaleLeaderboardIntersectionStrategy,
 }
 
@@ -15,7 +17,9 @@ def available_strategy_names() -> tuple[str, ...]:
     return tuple(STRATEGY_FACTORIES)
 
 
-def build_strategies(names: list[str] | None = None) -> list[MarketDiscoveryStrategy]:
+def build_strategies(
+    names: list[str] | None = None,
+) -> list[BaseMarketDiscoveryStrategy]:
     selected_names = names or list(available_strategy_names())
     unknown = sorted(set(selected_names) - set(STRATEGY_FACTORIES))
     if unknown:

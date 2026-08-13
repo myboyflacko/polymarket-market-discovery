@@ -30,17 +30,14 @@ class MarketDiscoveryRun(Base):
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     strategies: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    checked_wallet_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
+    strategy_log: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
     )
     observation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     discovered_market_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )
     registry_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    config_json: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
