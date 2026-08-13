@@ -13,7 +13,7 @@ Code and configuration are authoritative for current behavior. When non-standard
 
 ## Issue Tracker
 
-Use Linear through the Linear MCP. Use project `Polymarket Market Discovery` and team `Engineer`.
+For issue tracking use Linear through the Linear MCP. Use project `Polymarket Market Discovery` and team `Engineer`.
 
 ## Working Standards
 
