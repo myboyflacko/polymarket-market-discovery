@@ -7,6 +7,9 @@
 Um das Repository zu erkunden oder sich schnell darin zu bewegen, verwende die `INDEX.md` im Repository-Root.
 Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung ändert, muss `INDEX.md` in derselben Änderung aktualisiert werden.
 
+## Additional Context / Source of Truth
+
+Für projektspezifisches oder nicht allgemein bekanntes Wissen immer das Wiki verwenden: bei `wiki/index.md` starten und den relevanten aktiven Seiten folgen. `wiki/raw/` ist nur Evidenz. Das Wiki nur auf ausdrückliche Anfrage aktualisieren.
 
 ## Arbeitsstandard
 
