@@ -22,6 +22,9 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
+    database_url = config.attributes.get("database_url")
+    if database_url is not None:
+        return str(database_url)
     return get_database_url()
 
 
