@@ -4,12 +4,12 @@
 
 ## Projektindex
 
-Um das Repository zu erkunden oder sich schnell darin zu bewegen, verwende die `INDEX.md` im Repository-Root.
+Zur ersten Orientierung im Repository die `INDEX.md` im Repository-Root verwenden.
 Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung ändert, muss `INDEX.md` in derselben Änderung aktualisiert werden.
 
-## Additional Context / Source of Truth
+## Additional Project Context
 
-Für projektspezifisches oder nicht allgemein bekanntes Wissen immer das Wiki verwenden: bei `wiki/index.md` starten und den relevanten aktiven Seiten folgen. `wiki/raw/` ist nur Evidenz. Das Wiki nur auf ausdrückliche Anfrage aktualisieren und neue Seiten gemäß `wiki/SCHEMA.md` anlegen.
+Code und Konfiguration sind für aktuelles Verhalten maßgeblich. Wenn nicht allgemein bekanntes Projektwissen oder frühere projektspezifische Entscheidungen, Systeme oder Verfahren die Aufgabe beeinflussen können, bei `wiki/index.md` starten und nur relevante aktive Seiten lesen. `wiki/raw/` ist Evidenz. Das Wiki nur auf ausdrückliche Anfrage ändern; davor `wiki/SCHEMA.md` lesen.
 
 ## Arbeitsstandard
 
@@ -17,13 +17,13 @@ Für projektspezifisches oder nicht allgemein bekanntes Wissen immer das Wiki ve
 - Package Manager: `uv`; Projektbefehle mit `uv run` ausführen.
 - Tests: `pytest`. Neue Tests nur auf ausdrückliche Anfrage schreiben und anschließend ausführen. Die vollständige Testsuite nur auf ausdrückliche Anfrage starten.
 - Linter: `ruff`. Nur geänderte Python-Dateien mit `uv run ruff check <Dateien>` prüfen.
-- Zur Verifikation automatisch die kleinste aussagekräftige Prüfung ausführen: relevante bestehende `pytest`-Tests, andernfalls einen sicheren Smoke-Check. Fehlt beides, als Risiko melden.
-- Builds wie `uv build` oder Docker nur auf ausdrückliche Anfrage starten.
+- Zur Verifikation automatisch die kleinste aufgabengerechte Prüfung ausführen: relevante bestehende `pytest`-Tests bei Verhaltensänderungen, andernfalls einen sicheren aufgabenspezifischen Check. Fehlt eine ausführbare Prüfung, den Diff besonders prüfen, das Risiko melden und trotzdem lokal committen.
+- Builds wie `uv build` oder Docker nur starten, wenn sie ausdrücklich angefragt sind oder die Aufgabe direkt Build- oder Packaging-Verhalten ändert.
 - Ausgaben kurz und auf relevante Ergebnisse beschränkt halten.
 
 ## Workflow
 
-Implementieren → verifizieren → linten → Diff prüfen → nach erfolgreichen relevanten Checks committen.
+Implementieren → verifizieren → linten → Diff prüfen → committen. Fehler beheben und ab der betroffenen Prüfung wiederholen.
 
 ## Final Response
 
@@ -42,7 +42,7 @@ Wenn das Arbeitsverzeichnis ein Git-Repository ist:
 - Zu Beginn Status und Branches prüfen. Passt eine bestehende saubere Arbeitsbranch eindeutig zur Aufgabe, dort direkt weiterarbeiten.
 - Andernfalls von `dev` eine Branch mit genau einem fachlichen Zweck anlegen: `feature/*`, `fix/*`, `refactor/*` oder `docs/*`. Für sequenzielle und kleine Aufgaben im normalen Arbeitsverzeichnis arbeiten.
 - Separate Worktrees nur verwenden, wenn mehrere Aufgaben oder Agenten parallel arbeiten.
-- Ist `dev` oder die passende Arbeitsbranch nicht clean oder enthält fachfremde Änderungen, vor dem Bearbeiten Flacko fragen, was damit geschehen soll.
+- Ist die zu verwendende Arbeitsbranch nicht clean oder `dev` beim Anlegen einer neuen Branch nicht clean, vor dem Bearbeiten Flacko fragen, was damit geschehen soll.
 - Nur aufgabenbezogene Änderungen committen; unabhängige Funde lediglich als offene Arbeit melden. Abgeschlossene Änderungen standardmäßig lokal mit einer funktionalen Commit-Message committen.
 - Working Branch pushen und PR erstellen oder aktualisieren nur auf ausdrückliche Anfrage und nach erfolgreichen relevanten Checks.
 
