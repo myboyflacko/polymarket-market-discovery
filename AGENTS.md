@@ -11,6 +11,10 @@ When an entry point, top-level domain, or its responsibility changes, update `IN
 
 Code and configuration are authoritative for current behavior. When non-standard project knowledge or prior project-specific decisions, systems, or procedures could affect the task, start at `wiki/index.md` and read only relevant active pages. Treat `wiki/raw/` as evidence. Modify the wiki only when explicitly requested, and read `wiki/SCHEMA.md` first.
 
+## Issue Tracker
+
+Use Linear through the Linear MCP. Use project `Polymarket Market Discovery` and team `Engineer`.
+
 ## Working Standards
 
 - Change only what directly belongs to the task; avoid incidental refactors and speculative features.
