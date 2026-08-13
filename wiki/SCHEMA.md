@@ -86,6 +86,6 @@ project, reference, research, system
 
 ## Changes
 
-- Commit every completed curation change locally; no further Git flow rules apply.
+- Follow the repository Gitflow and commit every completed curation change locally.
 - List every new or modified curated page in the relevant index unless it is inactive, and document it in `log.md`.
 - Keep `log.md` append-only and follow its recorded format.
