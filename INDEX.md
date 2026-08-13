@@ -12,5 +12,7 @@
 | `tests/` | Nach den Source-Domains strukturierte Tests |
 | `README.md` | Nutzung und Betrieb |
 | `pyproject.toml` | Python-Projektkonfiguration und Abhängigkeiten |
+| `alembic.ini` | Alembic-Migrationskonfiguration |
+| `Dockerfile` | Container-Image des Services |
 | `docker-compose.yml` | Lokale Service-Infrastruktur |
 | `Makefile` | Lokale Entwicklungs- und Betriebskommandos |
