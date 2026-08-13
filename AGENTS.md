@@ -27,12 +27,12 @@ Implementieren → verifizieren → linten → Diff prüfen → nach erfolgreich
 
 ## Final Response
 
-Die Final Response verwendet immer diese Abschnitte; leere Abschnitte werden mit `None` angegeben:
+Mit einem kurzen Ergebnissatz beginnen. Danach diese durch Leerzeilen getrennten Labels ohne Markdown-Überschriften verwenden:
 
-- `### Changed`: geänderte Dateien und deren Änderung
-- `### Open`: offene Arbeiten
-- `### Risks`: verbleibende Risiken
-- `### Git`: Branch, Commit und PR-Status
+- `**Changed**`: geänderte Dateien und deren Änderung
+- `**Verification**`: ausgeführte Checks
+- `**Open / Risks**`: nur bei offenen Arbeiten oder verbleibenden Risiken
+- `**Git**`: Branch, Commit und PR-Status kompakt in einer Zeile
 
 ## Gitflow
 
