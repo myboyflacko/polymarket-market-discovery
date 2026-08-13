@@ -11,10 +11,25 @@ Wenn sich ein Einstiegspunkt, eine Top-Level-Domain oder ihre Verantwortung änd
 ## Arbeitsstandard
 
 - Nur ändern, was direkt zur Aufgabe gehört; keine Nebenbei-Refactors oder spekulativen Features.
-- Code mit `pytest` testen und mit `ruff check .` linten. Nicht ausgeführte Checks kurz begründen. Run Package mit `uv run`.
-- Vor Abschluss den Diff prüfen und offene Arbeiten oder Risiken benennen.
-- Kein verbose Output ohne explizite Aufforderung; nur relevante Ergebnisse berichten.
-- Die Final Response enthält `Geändert`, `Offen`, `Risiken` und, falls vorhanden, `Commit`.
+- Package Manager: `uv`; Projektbefehle mit `uv run` ausführen.
+- Tests: `pytest`. Neue Tests nur auf ausdrückliche Anfrage schreiben und anschließend ausführen. Die vollständige Testsuite nur auf ausdrückliche Anfrage starten.
+- Linter: `ruff`. Nur geänderte Python-Dateien mit `uv run ruff check <Dateien>` prüfen.
+- Zur Verifikation automatisch die kleinste aussagekräftige Prüfung ausführen: relevante bestehende `pytest`-Tests, andernfalls einen sicheren Smoke-Check. Fehlt beides, als Risiko melden.
+- Builds wie `uv build` oder Docker nur auf ausdrückliche Anfrage starten.
+- Ausgaben kurz und auf relevante Ergebnisse beschränkt halten.
+
+## Workflow
+
+Implementieren → verifizieren → linten → Diff prüfen → nach erfolgreichen relevanten Checks committen.
+
+## Final Response
+
+Die Final Response verwendet immer diese Abschnitte; leere Abschnitte werden mit `None` angegeben:
+
+- `### Changed`: geänderte Dateien und deren Änderung
+- `### Open`: offene Arbeiten
+- `### Risks`: verbleibende Risiken
+- `### Git`: Branch, Commit und PR-Status
 
 ## Gitflow
 
@@ -31,4 +46,3 @@ Wenn das Arbeitsverzeichnis ein Git-Repository ist:
 ## Safety
 
 Keine Live-Trades, keine echten Orders und keine Funds-Bewegung ohne explizite Freigabe von Flacko.
-Docker-Builds nur ausführen, wenn ausdrücklich aktiv danach gefragt wird.
