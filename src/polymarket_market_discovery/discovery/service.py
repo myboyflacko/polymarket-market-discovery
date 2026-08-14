@@ -9,6 +9,7 @@ from polymarket_market_discovery.discovery.domain import (
     DiscoveryRunResult,
     StrategyDiscoveryResult,
 )
+from polymarket_market_discovery.discovery.registry import build_strategies
 from polymarket_market_discovery.discovery.repository import (
     complete_discovery_run,
     complete_strategy,
@@ -16,17 +17,12 @@ from polymarket_market_discovery.discovery.repository import (
     fail_discovery_run,
     start_strategy,
 )
-from polymarket_market_discovery.discovery.strategies.base import (
-    BaseMarketDiscoveryStrategy,
-)
 from polymarket_market_discovery.polymarket.client import get_polymarket_client
 
 
 class MarketDiscoveryService:
-    def __init__(self, *, strategies: list[BaseMarketDiscoveryStrategy]) -> None:
-        if not strategies:
-            raise ValueError("At least one discovery strategy is required")
-        self.strategies = strategies
+    def __init__(self, *, strategy_names: list[str] | None = None) -> None:
+        self.strategies = build_strategies(strategy_names)
 
     async def run(self, *, now: datetime | None = None) -> DiscoveryRunResult:
         started_at = ensure_utc(now or datetime.now(UTC))
