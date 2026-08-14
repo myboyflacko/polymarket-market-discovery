@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import func, or_, select, update
 
 from polymarket_market_discovery.core.db.engine import database_session
 from polymarket_market_discovery.core.db.models import (
@@ -33,7 +33,7 @@ def get_market_sync_input() -> MarketSyncInput:
                     MarketDiscoveryRun.status == "completed",
                     MarketDiscoveryRun.registry_synced_at.is_(None),
                 )
-                .order_by(MarketDiscoveryRun.started_at)
+                .order_by(MarketDiscoveryRun.started_at, MarketDiscoveryRun.run_id)
             )
         )
         pending_conditions: set[str] = set()
@@ -93,6 +93,8 @@ def complete_market_sync_run(
 ) -> tuple[int, int]:
     checked_at = ensure_utc(checked_at)
     condition_ids = [payload.condition_id for payload in payloads]
+    if len(condition_ids) != len(set(condition_ids)):
+        raise ValueError("Registry payloads contain duplicate condition IDs")
     with database_session() as session:
         bounds = {
             condition_id: (first_seen, last_seen)
@@ -124,7 +126,54 @@ def complete_market_sync_run(
                 )
                 session.add(market)
                 created_count += 1
+                session.flush()
+                for token_payload in payload.tokens:
+                    existing_token = session.get(
+                        PolymarketToken, token_payload.token_id
+                    )
+                    if existing_token is not None:
+                        _validate_token_identity(
+                            token=existing_token,
+                            condition_id=payload.condition_id,
+                            outcome=token_payload.outcome,
+                            outcome_index=token_payload.outcome_index,
+                        )
+                        raise ValueError(
+                            f"Token {token_payload.token_id} already exists"
+                        )
+                    session.add(
+                        PolymarketToken(
+                            token_id=token_payload.token_id,
+                            condition_id=payload.condition_id,
+                            outcome=token_payload.outcome,
+                            outcome_index=token_payload.outcome_index,
+                            first_seen_at=checked_at,
+                            last_seen_at=checked_at,
+                        )
+                    )
             else:
+                stored_tokens = {
+                    token.token_id: token
+                    for token in session.scalars(
+                        select(PolymarketToken).where(
+                            PolymarketToken.condition_id == payload.condition_id
+                        )
+                    )
+                }
+                incoming_token_ids = {token.token_id for token in payload.tokens}
+                if set(stored_tokens) != incoming_token_ids:
+                    raise ValueError(
+                        f"Token set changed for market {payload.condition_id}"
+                    )
+                for token_payload in payload.tokens:
+                    token = stored_tokens[token_payload.token_id]
+                    _validate_token_identity(
+                        token=token,
+                        condition_id=payload.condition_id,
+                        outcome=token_payload.outcome,
+                        outcome_index=token_payload.outcome_index,
+                    )
+                    token.last_seen_at = checked_at
                 if payload.condition_id in bounds:
                     _, last_seen = bounds[payload.condition_id]
                     market.last_discovered_at = max(
@@ -145,37 +194,6 @@ def complete_market_sync_run(
             market.raw_latest_payload = payload.raw_payload
             market.updated_at = checked_at
             session.flush()
-
-            current_token_ids = {token.token_id for token in payload.tokens}
-            session.execute(
-                delete(PolymarketToken).where(
-                    PolymarketToken.condition_id == payload.condition_id,
-                    PolymarketToken.token_id.not_in(current_token_ids),
-                )
-            )
-            for token_payload in payload.tokens:
-                token = session.get(PolymarketToken, token_payload.token_id)
-                if token is None:
-                    session.add(
-                        PolymarketToken(
-                            token_id=token_payload.token_id,
-                            condition_id=payload.condition_id,
-                            outcome=token_payload.outcome,
-                            outcome_index=token_payload.outcome_index,
-                            first_seen_at=checked_at,
-                            last_seen_at=checked_at,
-                            raw_latest_payload=payload.raw_payload,
-                        )
-                    )
-                else:
-                    if token.condition_id != payload.condition_id:
-                        raise ValueError(
-                            f"Token {token.token_id} belongs to multiple conditions"
-                        )
-                    token.outcome = token_payload.outcome
-                    token.outcome_index = token_payload.outcome_index
-                    token.last_seen_at = checked_at
-                    token.raw_latest_payload = payload.raw_payload
 
             session.add(
                 MarketStatusSnapshot(
@@ -210,6 +228,21 @@ def complete_market_sync_run(
         )
         session.commit()
     return created_count, updated_count
+
+
+def _validate_token_identity(
+    *,
+    token: PolymarketToken,
+    condition_id: str,
+    outcome: str,
+    outcome_index: int,
+) -> None:
+    if token.condition_id != condition_id:
+        raise ValueError(f"Token {token.token_id} condition changed")
+    if token.outcome != outcome:
+        raise ValueError(f"Token {token.token_id} outcome changed")
+    if token.outcome_index != outcome_index:
+        raise ValueError(f"Token {token.token_id} outcome index changed")
 
 
 def fail_market_sync_run(

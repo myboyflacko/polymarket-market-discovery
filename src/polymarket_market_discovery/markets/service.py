@@ -41,8 +41,15 @@ class MarketRegistryService:
             return await self._run_locked(started_at=started_at)
 
     async def _run_locked(self, *, started_at: datetime) -> MarketRegistrySyncResult:
-        run_id = _build_run_id(started_at)
         sync_input = get_market_sync_input()
+        if not sync_input.discovery_run_ids and not sync_input.condition_ids:
+            return MarketRegistrySyncResult(
+                run_id=None,
+                status="skipped",
+                generated_at=started_at,
+                skip_reason="no_markets_to_sync",
+            )
+        run_id = _build_run_id(started_at)
         create_market_sync_run(
             run_id=run_id,
             started_at=started_at,
@@ -52,34 +59,12 @@ class MarketRegistryService:
             client = get_polymarket_client()
             payloads: list[PolymarketMarketPayload] = []
             for condition_batch in _batches(sync_input.condition_ids, self.batch_size):
-                rows = await client.get_gamma_markets(condition_batch, closed=False)
-                parsed = [parse_gamma_market(row) for row in rows]
-                returned_ids = {payload.condition_id for payload in parsed}
-                missing_ids = sorted(set(condition_batch) - returned_ids)
-                if missing_ids:
-                    closed_rows = await client.get_gamma_markets(
-                        missing_ids, closed=True
-                    )
-                    parsed.extend(parse_gamma_market(row) for row in closed_rows)
-                    returned_ids.update(payload.condition_id for payload in parsed)
-                    missing_ids = sorted(set(condition_batch) - returned_ids)
-                    if missing_ids:
-                        raise ValueError(
-                            f"Gamma omitted requested markets: {', '.join(missing_ids)}"
-                        )
-                payloads.extend(parsed)
-
-            payload_by_condition: dict[str, PolymarketMarketPayload] = {}
-            for payload in payloads:
-                existing = payload_by_condition.get(payload.condition_id)
-                if existing is not None and existing != payload:
-                    raise ValueError(
-                        f"Conflicting Gamma payload for {payload.condition_id}"
-                    )
-                payload_by_condition[payload.condition_id] = payload
+                payloads.extend(
+                    await _retrieve_market_batch(client, condition_batch)
+                )
             created_count, updated_count = complete_market_sync_run(
                 run_id=run_id,
-                payloads=list(payload_by_condition.values()),
+                payloads=payloads,
                 discovery_run_ids=sync_input.discovery_run_ids,
                 checked_at=datetime.now(UTC),
             )
@@ -95,11 +80,60 @@ class MarketRegistryService:
             run_id=run_id,
             status="completed",
             input_discovery_run_ids=sync_input.discovery_run_ids,
-            checked_market_count=len(payload_by_condition),
+            checked_market_count=len(payloads),
             created_market_count=created_count,
             updated_market_count=updated_count,
             generated_at=started_at,
         )
+
+
+async def _retrieve_market_batch(
+    client: Any, condition_ids: list[str]
+) -> list[PolymarketMarketPayload]:
+    open_rows = await client.get_gamma_markets(condition_ids, closed=False)
+    payload_by_condition = _index_gamma_payloads(
+        [parse_gamma_market(row) for row in open_rows], requested_ids=condition_ids
+    )
+    missing_ids = sorted(set(condition_ids) - payload_by_condition.keys())
+    if missing_ids:
+        closed_rows = await client.get_gamma_markets(missing_ids, closed=True)
+        payload_by_condition.update(
+            _index_gamma_payloads(
+                [parse_gamma_market(row) for row in closed_rows],
+                requested_ids=missing_ids,
+            )
+        )
+        missing_ids = sorted(set(condition_ids) - payload_by_condition.keys())
+        if missing_ids:
+            raise ValueError(
+                f"Gamma omitted requested markets: {', '.join(missing_ids)}"
+            )
+    return [payload_by_condition[condition_id] for condition_id in condition_ids]
+
+
+def _index_gamma_payloads(
+    payloads: list[PolymarketMarketPayload], *, requested_ids: list[str]
+) -> dict[str, PolymarketMarketPayload]:
+    unexpected_ids = sorted(
+        {payload.condition_id for payload in payloads} - set(requested_ids)
+    )
+    if unexpected_ids:
+        raise ValueError(
+            f"Gamma returned unexpected markets: {', '.join(unexpected_ids)}"
+        )
+
+    indexed: dict[str, PolymarketMarketPayload] = {}
+    for payload in payloads:
+        existing = indexed.get(payload.condition_id)
+        if existing is None:
+            indexed[payload.condition_id] = payload
+        elif existing == payload:
+            raise ValueError(f"Gamma returned duplicate market {payload.condition_id}")
+        else:
+            raise ValueError(
+                f"Gamma returned conflicting market {payload.condition_id}"
+            )
+    return indexed
 
 
 def parse_gamma_market(row: dict[str, Any]) -> PolymarketMarketPayload:
