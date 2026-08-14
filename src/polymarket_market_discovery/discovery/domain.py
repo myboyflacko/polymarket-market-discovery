@@ -1,29 +1,32 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class DiscoveryEvidenceItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    data: dict[str, Any]
+
+
+class DiscoveryEvidenceEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1] = 1
+    items: list[DiscoveryEvidenceItem] = Field(min_length=1)
 
 
 class MarketDiscoveryObservationPayload(BaseModel):
-    proxy_wallet: str | None = None
-    condition_id: str
-    held_token_id: str
-    opposite_token_id: str
-    outcome: str
-    opposite_outcome: str
-    position_size: Decimal
-    current_value: Decimal
-    title: str | None = None
-    slug: str | None = None
-    event_id: str | None = None
-    event_slug: str | None = None
-    end_date: datetime | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    condition_id: str = Field(min_length=1)
     observed_at: datetime
-    evidence_json: dict[str, Any] = Field(default_factory=dict)
-    raw_payload: dict[str, Any] = Field(default_factory=dict)
+    evidence_json: DiscoveryEvidenceEnvelope
 
 
 class StrategyDiscoveryResult(BaseModel):
@@ -31,6 +34,13 @@ class StrategyDiscoveryResult(BaseModel):
     strategy_version: str
     observations: list[MarketDiscoveryObservationPayload] = Field(default_factory=list)
     generated_at: datetime
+
+    @model_validator(mode="after")
+    def validate_unique_markets(self) -> Self:
+        condition_ids = [item.condition_id for item in self.observations]
+        if len(condition_ids) != len(set(condition_ids)):
+            raise ValueError("strategy result contains duplicate market observations")
+        return self
 
     @property
     def market_count(self) -> int:
@@ -57,6 +67,8 @@ class DiscoveryRunResult(BaseModel):
 
 
 __all__ = [
+    "DiscoveryEvidenceEnvelope",
+    "DiscoveryEvidenceItem",
     "DiscoveryRunResult",
     "MarketDiscoveryObservationPayload",
     "StrategyDiscoveryResult",

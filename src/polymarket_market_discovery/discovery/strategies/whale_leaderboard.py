@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from polymarket_market_discovery.discovery.domain import (
+    DiscoveryEvidenceEnvelope,
+    DiscoveryEvidenceItem,
     MarketDiscoveryObservationPayload,
     StrategyDiscoveryResult,
 )
@@ -24,6 +28,21 @@ from polymarket_market_discovery.polymarket.params.profile.current_positions imp
 LeaderboardOrder = Literal["PNL", "VOL"]
 MAX_POSITION_OFFSET = 10_000
 POSITION_PAGE_LIMIT = 500
+WHALE_POSITION_EVIDENCE_KIND = "whale_position"
+WHALE_POSITION_EVIDENCE_SOURCE = "polymarket_data_api.current_positions"
+
+
+class WhalePositionEvidenceData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proxy_wallet: str = Field(min_length=1)
+    outcome_token_id: str = Field(min_length=1)
+    opposite_token_id: str = Field(min_length=1)
+    outcome: str = Field(min_length=1)
+    opposite_outcome: str = Field(min_length=1)
+    position_size: Decimal
+    current_value: Decimal
+    raw_position: dict[str, Any]
 
 
 class WhaleLeaderboardIntersectionStrategy(BaseMarketDiscoveryStrategy):
@@ -130,21 +149,31 @@ async def _collect_wallet_positions(
             _collect_single_wallet_positions(
                 client=client,
                 wallet=wallet,
-                observed_at=observed_at,
             )
             for wallet in wallets
         ]
     )
-    return [observation for result in results for observation in result]
+    evidence_by_condition: dict[str, list[DiscoveryEvidenceItem]] = {}
+    for result in results:
+        for condition_id, evidence_item in result:
+            evidence_by_condition.setdefault(condition_id, []).append(evidence_item)
+
+    return [
+        MarketDiscoveryObservationPayload(
+            condition_id=condition_id,
+            observed_at=observed_at,
+            evidence_json=DiscoveryEvidenceEnvelope(items=evidence_items),
+        )
+        for condition_id, evidence_items in evidence_by_condition.items()
+    ]
 
 
 async def _collect_single_wallet_positions(
     *,
     client: PolymarketClient,
     wallet: str,
-    observed_at: datetime,
-) -> list[MarketDiscoveryObservationPayload]:
-    observations: list[MarketDiscoveryObservationPayload] = []
+) -> list[tuple[str, DiscoveryEvidenceItem]]:
+    positions: list[tuple[str, DiscoveryEvidenceItem]] = []
     offset = 0
     while offset <= MAX_POSITION_OFFSET:
         params = CurrentPositionsParams(
@@ -164,42 +193,34 @@ async def _collect_single_wallet_positions(
         for row in page:
             if not isinstance(row, dict):
                 raise ValueError(f"position row for {wallet} must be an object")
-            observations.append(
-                _normalize_position_observation(
-                    row=row,
-                    wallet=wallet,
-                    observed_at=observed_at,
-                )
-            )
+            positions.append(_normalize_position_evidence(row=row, wallet=wallet))
 
         if len(page) < params.limit:
             break
         offset += params.limit
-    return observations
+    return positions
 
 
-def _normalize_position_observation(
+def _normalize_position_evidence(
     *,
     row: dict[str, Any],
     wallet: str,
-    observed_at: datetime,
-) -> MarketDiscoveryObservationPayload:
-    return MarketDiscoveryObservationPayload(
+) -> tuple[str, DiscoveryEvidenceItem]:
+    condition_id = _required_string(row, "conditionId")
+    data = WhalePositionEvidenceData(
         proxy_wallet=wallet,
-        condition_id=_required_string(row, "conditionId"),
-        held_token_id=_required_string(row, "asset"),
+        outcome_token_id=_required_string(row, "asset"),
         opposite_token_id=_required_string(row, "oppositeAsset"),
         outcome=_required_string(row, "outcome"),
         opposite_outcome=_required_string(row, "oppositeOutcome"),
         position_size=_required_decimal(row, "size"),
         current_value=_required_decimal(row, "currentValue"),
-        title=_optional_string(row.get("title")),
-        slug=_optional_string(row.get("slug")),
-        event_id=_optional_string(row.get("eventId")),
-        event_slug=_optional_string(row.get("eventSlug")),
-        end_date=_optional_datetime(row.get("endDate")),
-        observed_at=observed_at,
-        raw_payload=row,
+        raw_position=row,
+    )
+    return condition_id, DiscoveryEvidenceItem(
+        kind=WHALE_POSITION_EVIDENCE_KIND,
+        source=WHALE_POSITION_EVIDENCE_SOURCE,
+        data=data.model_dump(mode="json"),
     )
 
 
@@ -215,20 +236,3 @@ def _required_decimal(row: dict[str, Any], key: str) -> Decimal:
         return Decimal(_required_string(row, key))
     except (InvalidOperation, ValueError) as exc:
         raise ValueError(f"invalid decimal field {key}") from exc
-
-
-def _optional_string(value: Any) -> str | None:
-    return None if value is None or str(value) == "" else str(value)
-
-
-def _optional_datetime(value: Any) -> datetime | None:
-    if value is None or str(value) == "":
-        return None
-    text = str(value)
-    try:
-        if text.endswith("Z"):
-            return datetime.fromisoformat(text[:-1]).replace(tzinfo=UTC)
-        parsed = datetime.fromisoformat(text)
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
-    except ValueError as exc:
-        raise ValueError(f"invalid datetime value: {value!r}") from exc

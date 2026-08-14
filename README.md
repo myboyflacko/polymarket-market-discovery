@@ -9,9 +9,10 @@ Orders, führt keine Trades aus und bewegt keine Funds.
 
 ## Pipeline
 
-1. **Discovery** speichert jeden Discovery-Run und jede Position append-only. Die
-   erste Strategie nimmt die Schnittmenge der Top-25 DAY/OVERALL Leaderboards für
-   PnL und Volume.
+1. **Discovery** speichert jeden Discovery-Run und jede von einer Strategie
+   beobachtete Market-Evidenz append-only. Mehrere Evidenztreffer derselben
+   Strategie werden pro Market aggregiert. Die erste Strategie nimmt die
+   Schnittmenge der Top-25 DAY/OVERALL Leaderboards für PnL und Volume.
 2. **Market Registry** dedupliziert über `condition_id` und aktualisiert Status,
    Enddatum sowie beide Outcome-Tokens über Gamma. Neue, unbekannte und alle noch
    nicht terminalen Märkte werden erneut geprüft.

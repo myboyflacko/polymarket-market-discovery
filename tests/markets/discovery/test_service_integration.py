@@ -65,7 +65,7 @@ def test_discovery_service_persists_complete_registered_strategy_run(
     assert result.status == "completed"
     assert result.run_id is not None
     assert result.strategies == expected_strategies
-    assert result.observation_count == 3
+    assert result.observation_count == 2
     assert result.discovered_market_count == 2
     assert Counter(client.leaderboard_orders) == {"PNL": 1, "VOL": 1}
     assert client.position_wallets == [WALLET]
@@ -80,26 +80,29 @@ def test_discovery_service_persists_complete_registered_strategy_run(
     assert run.strategies == expected_strategies
     assert [entry["strategy"] for entry in run.strategy_log] == expected_strategies
     assert [entry["version"] for entry in run.strategy_log] == expected_versions
-    assert [entry["status"] for entry in run.strategy_log] == [
-        "completed"
-    ] * len(registered_strategies)
+    assert [entry["status"] for entry in run.strategy_log] == ["completed"] * len(
+        registered_strategies
+    )
     assert all(entry["finished_at"] is not None for entry in run.strategy_log)
-    assert run.observation_count == len(observations) == 3
+    assert run.observation_count == len(observations) == 2
     assert run.discovered_market_count == 2
-    assert [row.discovery_run_id for row in observations] == [run.run_id] * 3
+    assert [row.discovery_run_id for row in observations] == [run.run_id] * 2
     assert [row.condition_id for row in observations] == [
-        "condition-1",
         "condition-1",
         "condition-2",
     ]
+    assert {row.strategy for row in observations} == set(expected_strategies)
+    assert {row.strategy_version for row in observations} == set(expected_versions)
+    assert [len(row.evidence_json["items"]) for row in observations] == [2, 1]
+    assert all(row.evidence_json["schema_version"] == 1 for row in observations)
 
 
 def _position(
-    condition_id: str, held_token_id: str, opposite_token_id: str
+    condition_id: str, outcome_token_id: str, opposite_token_id: str
 ) -> dict[str, Any]:
     return {
         "conditionId": condition_id,
-        "asset": held_token_id,
+        "asset": outcome_token_id,
         "oppositeAsset": opposite_token_id,
         "outcome": "Yes",
         "oppositeOutcome": "No",

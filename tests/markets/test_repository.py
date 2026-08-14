@@ -36,7 +36,10 @@ def test_registry_deduplicates_discovery_and_stores_both_tokens(
             )
         )
         session.add_all(
-            [_observation("discovery-1"), _observation("discovery-1")]
+            [
+                _observation("discovery-1", "strategy-one"),
+                _observation("discovery-1", "strategy-two"),
+            ]
         )
         session.commit()
 
@@ -103,17 +106,23 @@ def test_terminal_markets_are_not_refreshed(monkeypatch, sqlite_database) -> Non
     assert repository.get_market_sync_input().condition_ids == []
 
 
-def _observation(discovery_run_id: str) -> MarketDiscoveryObservation:
+def _observation(discovery_run_id: str, strategy: str) -> MarketDiscoveryObservation:
     return MarketDiscoveryObservation(
         discovery_run_id=discovery_run_id,
+        strategy=strategy,
+        strategy_version="v1",
         condition_id="condition-1",
-        held_token_id="token-yes",
-        opposite_token_id="token-no",
-        outcome="Yes",
-        opposite_outcome="No",
-        position_size=10,
-        current_value=5,
         observed_at=NOW,
+        evidence_json={
+            "schema_version": 1,
+            "items": [
+                {
+                    "kind": "test_evidence",
+                    "source": "test.market_repository",
+                    "data": {},
+                }
+            ],
+        },
     )
 
 
