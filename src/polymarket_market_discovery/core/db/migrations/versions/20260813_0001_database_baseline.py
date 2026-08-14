@@ -109,7 +109,8 @@ def upgrade() -> None:
     sa.Column('raw_payload', sa.JSON(), nullable=False),
     sa.ForeignKeyConstraint(['condition_id'], ['polymarket_markets.condition_id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['sync_run_id'], ['market_registry_sync_runs.run_id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('sync_run_id', 'condition_id', name='uq_market_status_snapshot_run_condition')
     )
     op.create_index('ix_market_status_condition_checked', 'market_status_snapshots', ['condition_id', 'checked_at'], unique=False)
     op.create_table('orderbook_collection_items',
@@ -173,9 +174,9 @@ def upgrade() -> None:
     sa.Column('outcome_index', sa.Integer(), nullable=False),
     sa.Column('first_seen_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('last_seen_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('raw_latest_payload', sa.JSON(), nullable=False),
     sa.ForeignKeyConstraint(['condition_id'], ['polymarket_markets.condition_id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('token_id')
+    sa.PrimaryKeyConstraint('token_id'),
+    sa.UniqueConstraint('condition_id', 'outcome_index', name='uq_polymarket_token_condition_outcome_index')
     )
     op.create_index('ix_polymarket_tokens_condition', 'polymarket_tokens', ['condition_id'], unique=False)
     # ### end Alembic commands ###

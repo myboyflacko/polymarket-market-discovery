@@ -12,6 +12,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -86,7 +87,14 @@ class PolymarketMarket(Base):
 
 class PolymarketToken(Base):
     __tablename__ = "polymarket_tokens"
-    __table_args__ = (Index("ix_polymarket_tokens_condition", "condition_id"),)
+    __table_args__ = (
+        Index("ix_polymarket_tokens_condition", "condition_id"),
+        UniqueConstraint(
+            "condition_id",
+            "outcome_index",
+            name="uq_polymarket_token_condition_outcome_index",
+        ),
+    )
 
     token_id: Mapped[str] = mapped_column(String, primary_key=True)
     condition_id: Mapped[str] = mapped_column(
@@ -101,15 +109,15 @@ class PolymarketToken(Base):
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    raw_latest_payload: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
-
-
 class MarketStatusSnapshot(Base):
     __tablename__ = "market_status_snapshots"
     __table_args__ = (
         Index("ix_market_status_condition_checked", "condition_id", "checked_at"),
+        UniqueConstraint(
+            "sync_run_id",
+            "condition_id",
+            name="uq_market_status_snapshot_run_condition",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
