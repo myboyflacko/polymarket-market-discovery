@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from polymarket_market_discovery.core.db.models import (
@@ -9,16 +11,17 @@ from polymarket_market_discovery.core.db.models import (
 from polymarket_market_discovery.core.time import ensure_utc
 from polymarket_market_discovery.discovery import repository
 from polymarket_market_discovery.discovery.domain import (
+    DiscoveryEvidenceEnvelope,
+    DiscoveryEvidenceItem,
     MarketDiscoveryObservationPayload,
     StrategyDiscoveryResult,
 )
 
 
 NOW = datetime(2026, 8, 10, tzinfo=UTC)
-WALLET = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 
-def test_discovery_persists_append_only_observations(
+def test_discovery_persists_strategy_market_observations(
     monkeypatch, sqlite_database
 ) -> None:
     _, session_factory, test_session = sqlite_database
@@ -29,20 +32,21 @@ def test_discovery_persists_append_only_observations(
             run_id=run_id,
             started_at=NOW,
         )
-        result = _result()
-        repository.start_strategy(
-            run_id=run_id,
-            strategy="strategy",
-            version="v1",
-            started_at=NOW,
-        )
-        repository.complete_strategy(
-            run_id=run_id,
-            strategy="strategy",
-            finished_at=NOW,
-        )
+        results = [_result("strategy-one"), _result("strategy-two")]
+        for result in results:
+            repository.start_strategy(
+                run_id=run_id,
+                strategy=result.strategy,
+                version=result.strategy_version,
+                started_at=NOW,
+            )
+            repository.complete_strategy(
+                run_id=run_id,
+                strategy=result.strategy,
+                finished_at=NOW,
+            )
         repository.complete_discovery_run(
-            run_id=run_id, results=[result], finished_at=NOW
+            run_id=run_id, results=results, finished_at=NOW
         )
 
     with session_factory() as session:
@@ -53,13 +57,24 @@ def test_discovery_persists_append_only_observations(
     assert len(observations) == 4
     assert {row.condition_id for row in observations} == {"condition-1"}
     assert {row.discovery_run_id for row in observations} == {"run-1", "run-2"}
+    assert {row.strategy for row in observations} == {
+        "strategy-one",
+        "strategy-two",
+    }
+    assert {row.strategy_version for row in observations} == {"v1"}
+    assert {
+        row.evidence_json["items"][0]["data"]["marker"] for row in observations
+    } == {
+        "strategy-one",
+        "strategy-two",
+    }
     for run in runs:
         assert run.status == "completed"
         assert run.finished_at is not None
         assert ensure_utc(run.finished_at) == NOW
-        assert run.strategies == ["strategy"]
-        assert run.strategy_log[0]["version"] == "v1"
-        assert run.strategy_log[0]["status"] == "completed"
+        assert run.strategies == ["strategy-one", "strategy-two"]
+        assert {entry["version"] for entry in run.strategy_log} == {"v1"}
+        assert {entry["status"] for entry in run.strategy_log} == {"completed"}
         assert run.observation_count == 2
         assert run.discovered_market_count == 1
 
@@ -96,21 +111,38 @@ def test_discovery_failure_finishes_run_and_strategy(
     assert run.strategy_log[0]["error_message"] == "discovery failed"
 
 
-def _result() -> StrategyDiscoveryResult:
-    observation = MarketDiscoveryObservationPayload(
-        proxy_wallet=WALLET,
-        condition_id="condition-1",
-        held_token_id="token-yes",
-        opposite_token_id="token-no",
-        outcome="Yes",
-        opposite_outcome="No",
-        position_size=10,
-        current_value=5,
-        observed_at=NOW,
-    )
+def test_strategy_result_rejects_duplicate_market_observations() -> None:
+    observation = _observation("strategy")
+
+    with pytest.raises(ValidationError, match="duplicate market observations"):
+        StrategyDiscoveryResult(
+            strategy="strategy",
+            strategy_version="v1",
+            observations=[observation, observation.model_copy()],
+            generated_at=NOW,
+        )
+
+
+def _result(strategy: str) -> StrategyDiscoveryResult:
     return StrategyDiscoveryResult(
-        strategy="strategy",
+        strategy=strategy,
         strategy_version="v1",
-        observations=[observation, observation.model_copy()],
+        observations=[_observation(strategy)],
         generated_at=NOW,
+    )
+
+
+def _observation(strategy: str) -> MarketDiscoveryObservationPayload:
+    return MarketDiscoveryObservationPayload(
+        condition_id="condition-1",
+        observed_at=NOW,
+        evidence_json=DiscoveryEvidenceEnvelope(
+            items=[
+                DiscoveryEvidenceItem(
+                    kind="test_evidence",
+                    source="test.repository",
+                    data={"marker": strategy},
+                )
+            ]
+        ),
     )

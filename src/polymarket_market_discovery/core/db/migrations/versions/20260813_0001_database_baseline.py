@@ -85,24 +85,14 @@ def upgrade() -> None:
     op.create_table('market_discovery_observations',
     sa.Column('id', sa.BigInteger().with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('discovery_run_id', sa.String(), nullable=False),
-    sa.Column('proxy_wallet', sa.String(), nullable=True),
+    sa.Column('strategy', sa.String(), nullable=False),
+    sa.Column('strategy_version', sa.String(), nullable=False),
     sa.Column('condition_id', sa.String(), nullable=False),
-    sa.Column('held_token_id', sa.String(), nullable=False),
-    sa.Column('opposite_token_id', sa.String(), nullable=False),
-    sa.Column('outcome', sa.String(), nullable=False),
-    sa.Column('opposite_outcome', sa.String(), nullable=False),
-    sa.Column('position_size', sa.Numeric(), nullable=False),
-    sa.Column('current_value', sa.Numeric(), nullable=False),
-    sa.Column('title', sa.String(), nullable=True),
-    sa.Column('slug', sa.String(), nullable=True),
-    sa.Column('event_id', sa.String(), nullable=True),
-    sa.Column('event_slug', sa.String(), nullable=True),
-    sa.Column('end_date', sa.DateTime(timezone=True), nullable=True),
     sa.Column('observed_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('evidence_json', sa.JSON(), nullable=False),
-    sa.Column('raw_payload', sa.JSON(), nullable=False),
     sa.ForeignKeyConstraint(['discovery_run_id'], ['market_discovery_runs.run_id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('discovery_run_id', 'strategy', 'condition_id', name='uq_discovery_observation_run_strategy_condition')
     )
     op.create_index('ix_discovery_observations_condition_observed', 'market_discovery_observations', ['condition_id', 'observed_at'], unique=False)
     op.create_index('ix_discovery_observations_discovery_run', 'market_discovery_observations', ['discovery_run_id'], unique=False)

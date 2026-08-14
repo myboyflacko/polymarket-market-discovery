@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -10,9 +9,9 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
-    Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -53,34 +52,25 @@ class MarketDiscoveryObservation(Base):
             "observed_at",
         ),
         Index("ix_discovery_observations_discovery_run", "discovery_run_id"),
+        UniqueConstraint(
+            "discovery_run_id",
+            "strategy",
+            "condition_id",
+            name="uq_discovery_observation_run_strategy_condition",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     discovery_run_id: Mapped[str] = mapped_column(
         ForeignKey("market_discovery_runs.run_id", ondelete="CASCADE"), nullable=False
     )
-    proxy_wallet: Mapped[str | None] = mapped_column(String)
+    strategy: Mapped[str] = mapped_column(String, nullable=False)
+    strategy_version: Mapped[str] = mapped_column(String, nullable=False)
     condition_id: Mapped[str] = mapped_column(String, nullable=False)
-    held_token_id: Mapped[str] = mapped_column(String, nullable=False)
-    opposite_token_id: Mapped[str] = mapped_column(String, nullable=False)
-    outcome: Mapped[str] = mapped_column(String, nullable=False)
-    opposite_outcome: Mapped[str] = mapped_column(String, nullable=False)
-    position_size: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
-    current_value: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
-    title: Mapped[str | None] = mapped_column(String)
-    slug: Mapped[str | None] = mapped_column(String)
-    event_id: Mapped[str | None] = mapped_column(String)
-    event_slug: Mapped[str | None] = mapped_column(String)
-    end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     observed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    evidence_json: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
-    raw_payload: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    evidence_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 
 __all__ = ["MarketDiscoveryObservation", "MarketDiscoveryRun"]

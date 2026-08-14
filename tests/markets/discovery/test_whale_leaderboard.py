@@ -3,10 +3,15 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
+from polymarket_market_discovery.discovery.domain import DiscoveryEvidenceEnvelope
 from polymarket_market_discovery.discovery.strategies.whale_leaderboard import (
+    WHALE_POSITION_EVIDENCE_KIND,
+    WHALE_POSITION_EVIDENCE_SOURCE,
+    WhalePositionEvidenceData,
     WhaleLeaderboardIntersectionStrategy,
-    _normalize_position_observation,
+    _normalize_position_evidence,
     _select_intersection_wallets,
 )
 
@@ -35,7 +40,10 @@ class FakePolymarketClient:
     async def get_current_positions(self, params: Any) -> list[dict[str, Any]]:
         self.position_wallets.append(params.user)
         assert params.sizeThreshold == 0
-        return [_position_row()]
+        second_position = _position_row()
+        second_position["size"] = "20.5"
+        second_position["currentValue"] = "12.2"
+        return [_position_row(), second_position]
 
 
 def test_strategy_collects_positions_for_intersection_wallets() -> None:
@@ -47,11 +55,18 @@ def test_strategy_collects_positions_for_intersection_wallets() -> None:
     assert client.position_wallets == [WALLET_TWO]
     assert result.strategy == strategy.name
     assert result.strategy_version == strategy.version
-    assert result.observations[0].proxy_wallet == WALLET_TWO
+    assert len(result.observations) == 1
     assert result.observations[0].condition_id == "condition-1"
-    assert result.observations[0].held_token_id == "token-yes"
-    assert result.observations[0].opposite_token_id == "token-no"
-    assert result.observations[0].raw_payload == _position_row()
+    evidence = result.observations[0].evidence_json
+    assert evidence.schema_version == 1
+    assert len(evidence.items) == 2
+    assert {item.kind for item in evidence.items} == {WHALE_POSITION_EVIDENCE_KIND}
+    assert {item.source for item in evidence.items} == {WHALE_POSITION_EVIDENCE_SOURCE}
+    first_position = WhalePositionEvidenceData.model_validate(evidence.items[0].data)
+    assert first_position.proxy_wallet == WALLET_TWO
+    assert first_position.outcome_token_id == "token-yes"
+    assert first_position.opposite_token_id == "token-no"
+    assert first_position.raw_position == _position_row()
 
 
 def test_intersection_preserves_pnl_order() -> None:
@@ -71,7 +86,17 @@ def test_position_validation_is_strict() -> None:
     del row["oppositeAsset"]
 
     with pytest.raises(ValueError, match="oppositeAsset"):
-        _normalize_position_observation(row=row, wallet=WALLET_ONE, observed_at=NOW)
+        _normalize_position_evidence(row=row, wallet=WALLET_ONE)
+
+
+def test_evidence_contract_validation_is_strict() -> None:
+    with pytest.raises(ValidationError, match="at least 1 item"):
+        DiscoveryEvidenceEnvelope(items=[])
+
+    data = _position_row()
+    del data["asset"]
+    with pytest.raises(ValueError, match="asset"):
+        _normalize_position_evidence(row=data, wallet=WALLET_ONE)
 
 
 def _leaderboard_row(

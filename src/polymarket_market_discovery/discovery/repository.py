@@ -84,22 +84,11 @@ def complete_discovery_run(
                 session.add(
                     MarketDiscoveryObservation(
                         discovery_run_id=run_id,
-                        proxy_wallet=observation.proxy_wallet,
+                        strategy=result.strategy,
+                        strategy_version=result.strategy_version,
                         condition_id=observation.condition_id,
-                        held_token_id=observation.held_token_id,
-                        opposite_token_id=observation.opposite_token_id,
-                        outcome=observation.outcome,
-                        opposite_outcome=observation.opposite_outcome,
-                        position_size=observation.position_size,
-                        current_value=observation.current_value,
-                        title=observation.title,
-                        slug=observation.slug,
-                        event_id=observation.event_id,
-                        event_slug=observation.event_slug,
-                        end_date=observation.end_date,
                         observed_at=ensure_utc(observation.observed_at),
-                        evidence_json=observation.evidence_json,
-                        raw_payload=observation.raw_payload,
+                        evidence_json=observation.evidence_json.model_dump(mode="json"),
                     )
                 )
 

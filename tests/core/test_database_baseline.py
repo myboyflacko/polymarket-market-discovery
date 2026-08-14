@@ -5,6 +5,8 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine, inspect
 
+from polymarket_market_discovery.core.db.models import MarketDiscoveryObservation
+
 
 MIGRATIONS_DIR = (
     Path(__file__).resolve().parents[2]
@@ -23,6 +25,18 @@ EXPECTED_TABLES = {
     "polymarket_markets",
     "polymarket_tokens",
 }
+EXPECTED_DISCOVERY_OBSERVATION_COLUMNS = {
+    "id",
+    "discovery_run_id",
+    "strategy",
+    "strategy_version",
+    "condition_id",
+    "observed_at",
+    "evidence_json",
+}
+DISCOVERY_OBSERVATION_UNIQUE_CONSTRAINT = (
+    "uq_discovery_observation_run_strategy_condition"
+)
 
 
 def test_alembic_upgrade_initializes_sqlite_database(tmp_path: Path) -> None:
@@ -49,4 +63,26 @@ def test_alembic_baseline_creates_all_model_tables(tmp_path: Path) -> None:
     command.upgrade(config, "head")
 
     engine = create_engine(f"sqlite+pysqlite:///{database_path}")
-    assert set(inspect(engine).get_table_names()) == EXPECTED_TABLES
+    inspector = inspect(engine)
+    assert set(inspector.get_table_names()) == EXPECTED_TABLES
+    assert {
+        column["name"]
+        for column in inspector.get_columns("market_discovery_observations")
+    } == EXPECTED_DISCOVERY_OBSERVATION_COLUMNS
+    assert {
+        constraint["name"]
+        for constraint in inspector.get_unique_constraints(
+            "market_discovery_observations"
+        )
+    } == {DISCOVERY_OBSERVATION_UNIQUE_CONSTRAINT}
+
+
+def test_discovery_observation_model_matches_baseline_contract() -> None:
+    assert set(MarketDiscoveryObservation.__table__.columns.keys()) == (
+        EXPECTED_DISCOVERY_OBSERVATION_COLUMNS
+    )
+    assert {
+        constraint.name
+        for constraint in MarketDiscoveryObservation.__table__.constraints
+        if constraint.name == DISCOVERY_OBSERVATION_UNIQUE_CONSTRAINT
+    } == {DISCOVERY_OBSERVATION_UNIQUE_CONSTRAINT}
