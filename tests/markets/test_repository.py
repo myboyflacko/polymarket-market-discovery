@@ -5,7 +5,6 @@ from sqlalchemy import select
 from polymarket_market_discovery.core.db.models import (
     MarketDiscoveryObservation,
     MarketDiscoveryRun,
-    MarketDiscoveryStrategyRun,
     MarketRegistrySyncRun,
     MarketStatusSnapshot,
     PolymarketMarket,
@@ -36,15 +35,9 @@ def test_registry_deduplicates_discovery_and_stores_both_tokens(
                 strategies=["strategy"],
             )
         )
-        strategy = MarketDiscoveryStrategyRun(
-            discovery_run_id="discovery-1",
-            strategy="strategy",
-            strategy_version="v1",
-            status="completed",
+        session.add_all(
+            [_observation("discovery-1"), _observation("discovery-1")]
         )
-        session.add(strategy)
-        session.flush()
-        session.add_all([_observation(strategy.id), _observation(strategy.id)])
         session.commit()
 
     sync_input = repository.get_market_sync_input()
@@ -110,9 +103,9 @@ def test_terminal_markets_are_not_refreshed(monkeypatch, sqlite_database) -> Non
     assert repository.get_market_sync_input().condition_ids == []
 
 
-def _observation(strategy_run_id: int) -> MarketDiscoveryObservation:
+def _observation(discovery_run_id: str) -> MarketDiscoveryObservation:
     return MarketDiscoveryObservation(
-        strategy_run_id=strategy_run_id,
+        discovery_run_id=discovery_run_id,
         condition_id="condition-1",
         held_token_id="token-yes",
         opposite_token_id="token-no",

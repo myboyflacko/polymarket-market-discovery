@@ -9,7 +9,6 @@ from polymarket_market_discovery.core.db.engine import database_session
 from polymarket_market_discovery.core.db.models import (
     MarketDiscoveryObservation,
     MarketDiscoveryRun,
-    MarketDiscoveryStrategyRun,
     MarketRegistrySyncRun,
     MarketStatusSnapshot,
     PolymarketMarket,
@@ -42,13 +41,8 @@ def get_market_sync_input() -> MarketSyncInput:
             pending_conditions.update(
                 session.scalars(
                     select(MarketDiscoveryObservation.condition_id)
-                    .join(
-                        MarketDiscoveryStrategyRun,
-                        MarketDiscoveryStrategyRun.id
-                        == MarketDiscoveryObservation.strategy_run_id,
-                    )
                     .where(
-                        MarketDiscoveryStrategyRun.discovery_run_id.in_(
+                        MarketDiscoveryObservation.discovery_run_id.in_(
                             discovery_run_ids
                         )
                     )

@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 from polymarket_market_discovery.core.logging import configure_logging
 from polymarket_market_discovery.discovery.registry import (
     available_strategy_names,
-    build_strategies,
 )
 
 if TYPE_CHECKING:
@@ -184,7 +183,7 @@ def build_discovery_service(
         MarketDiscoveryService,
     )
 
-    return MarketDiscoveryService(strategies=build_strategies(strategy_names))
+    return MarketDiscoveryService(strategy_names=strategy_names)
 
 
 def build_market_service(batch_size: int) -> MarketRegistryService:
