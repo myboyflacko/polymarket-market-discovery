@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -10,7 +11,21 @@ def test_cli_exposes_all_three_layers_and_all() -> None:
 
     for service in ("discovery", "markets", "orderbooks", "all"):
         assert parser.parse_args(["run", service]).service == service
-        assert parser.parse_args(["schedule", service]).service == service
+
+    schedule_args = parser.parse_args(["schedule"])
+    assert (schedule_args.discovery_interval, schedule_args.markets_interval) == (900, 900)
+    assert schedule_args.orderbooks_interval == 300
+    with pytest.raises(SystemExit):
+        parser.parse_args(["schedule", "all"])
+
+
+def test_manual_orderbooks_registry_age_can_be_overridden() -> None:
+    parser = cli.build_parser()
+    assert parser.parse_args(["run", "orderbooks"]).market_registry_max_age_seconds == 1800
+    args = parser.parse_args(
+        ["run", "orderbooks", "--market-registry-max-age-seconds", "60"]
+    )
+    assert args.market_registry_max_age_seconds == 60
 
 
 def test_strategy_option_is_repeatable() -> None:
@@ -31,51 +46,41 @@ def test_strategy_option_is_repeatable() -> None:
     ]
 
 
-def test_run_all_is_sequential_and_fail_fast(monkeypatch, capsys) -> None:
+def test_run_all_dispatches_to_pipeline_coordinator(monkeypatch, capsys) -> None:
     calls: list[str] = []
 
-    class Service:
-        def __init__(self, name: str, result: SimpleNamespace) -> None:
-            self.name = name
-            self.result = result
+    class Coordinator:
+        async def run_once(self):
+            calls.append("pipeline")
+            return SimpleNamespace(
+                status="partial", discovery=None, markets=None, orderbooks=None,
+                errors={"discovery": "unavailable"},
+            )
 
-        async def run(self):
-            calls.append(self.name)
-            return self.result
-
-    monkeypatch.setattr(
-        cli,
-        "build_discovery_service",
-        lambda names: Service(
-            "discovery",
-            SimpleNamespace(
-                status="completed",
-                run_id="d",
-                discovered_market_count=1,
-                observation_count=1,
-            ),
-        ),
-    )
-    monkeypatch.setattr(
-        cli,
-        "build_market_service",
-        lambda size: Service(
-            "markets",
-            SimpleNamespace(
-                status="skipped",
-                run_id=None,
-                checked_market_count=0,
-                created_market_count=0,
-                updated_market_count=0,
-            ),
-        ),
-    )
-    monkeypatch.setattr(
-        cli,
-        "build_orderbook_service",
-        lambda size: pytest.fail("orderbooks must not run after skipped markets"),
-    )
+    monkeypatch.setattr(cli, "build_pipeline_coordinator", lambda args, *, scheduled: Coordinator())
 
     assert cli.main(["run", "all"]) == 0
-    assert calls == ["discovery", "markets"]
-    assert "Markets skipped" in capsys.readouterr().out
+    assert calls == ["pipeline"]
+    assert "Pipeline partial" in capsys.readouterr().out
+
+
+def test_scheduler_derives_registry_age_from_market_interval(monkeypatch) -> None:
+    captured: list[tuple[int, int]] = []
+    async def run(**kwargs):
+        return None
+    service = SimpleNamespace(run=run)
+    monkeypatch.setattr(cli, "build_discovery_service", lambda names: service)
+    monkeypatch.setattr(cli, "build_market_service", lambda size: service)
+    monkeypatch.setattr(
+        cli, "build_orderbook_service",
+        lambda size, max_age: captured.append((size, max_age)) or service,
+    )
+    args = cli.build_parser().parse_args(["schedule", "--markets-interval", "120"])
+    cli.build_pipeline_coordinator(args, scheduled=True)
+    assert captured == [(50, 240)]
+
+
+def test_container_runtime_uses_coordinator_command() -> None:
+    root = Path(__file__).resolve().parents[1]
+    assert 'CMD ["polymarket-market-discovery", "schedule"]' in (root / "Dockerfile").read_text()
+    assert 'command: ["polymarket-market-discovery", "schedule"]' in (root / "docker-compose.yml").read_text()

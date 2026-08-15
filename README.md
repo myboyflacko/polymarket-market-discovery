@@ -19,6 +19,11 @@ Orders, führt keine Trades aus und bewegt keine Funds.
 3. **Orderbooks** sammeln beide Tokens aller kanonischen Märkte mit
    `active=true`, `closed=false`, `archived=false` und `enable_order_book=true`.
 
+Ein Pipeline Coordinator führt den initialen Lauf sequenziell als Discovery →
+Market Registry → Orderbooks aus. Danach laufen Discovery und Registry auf
+festen 15-Minuten-Deadlines, Orderbooks alle 5 Minuten. Erfolgreiche Läufe
+kaskadieren in den jeweils nachgelagerten Layer, ohne feste Deadlines zu verschieben.
+
 Discovery-Historie wird nie als Collection-Universum interpretiert. Ein einmal
 entdeckter Markt bleibt in der Registry, bis Gamma seinen aktuellen Status ändert.
 
@@ -39,14 +44,18 @@ polymarket-market-discovery run markets
 polymarket-market-discovery run orderbooks
 polymarket-market-discovery run all
 
-polymarket-market-discovery schedule discovery
-polymarket-market-discovery schedule markets
-polymarket-market-discovery schedule orderbooks
-polymarket-market-discovery schedule all
+polymarket-market-discovery schedule
 ```
 
 `--strategy` ist wiederholbar; ohne Angabe laufen alle registrierten Strategien.
-`run all` arbeitet fail-fast in der Reihenfolge Discovery, Markets, Orderbooks.
+`run all` arbeitet sequenziell und fasst Layer-Fehler in einem Pipeline-Ergebnis
+zusammen. Der Scheduler nutzt standardmäßig Intervalle von 900, 900 und 300
+Sekunden; verpasste Ticks werden einmal zusammengefasst, ohne Catch-up-Bursts.
+Orderbooks verwenden die kanonischen Tabellen `polymarket_markets` und
+`polymarket_tokens`. Der letzte erfolgreiche Registry-Sync darf höchstens zweimal
+so alt wie das Registry-Intervall sein. Manuelle Runs nutzen standardmäßig 1800
+Sekunden; `--market-registry-max-age-seconds` überschreibt diesen Wert. Eine
+frische persistierte Registry bleibt bei vorgelagerten Fehlern nutzbar.
 Alle Layer teilen einen PostgreSQL Advisory Lock, damit Discovery/Registry und
 Orderbook-Sammlung nicht gleichzeitig schreiben.
 
