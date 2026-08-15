@@ -7,6 +7,7 @@ from sqlalchemy import func, select, update
 
 from polymarket_market_discovery.core.db.engine import database_session
 from polymarket_market_discovery.core.db.models import (
+    MarketRegistrySyncRun,
     OrderbookCollectionItem,
     OrderbookCollectionRun,
     OrderbookSnapshot,
@@ -18,6 +19,31 @@ from polymarket_market_discovery.orderbooks.domain import (
     OrderBookCollectionItemPayload,
     ParsedOrderBook,
 )
+
+
+def get_last_successful_market_registry_sync_at() -> datetime | None:
+    with database_session() as session:
+        finished_at = session.scalar(
+            select(func.max(MarketRegistrySyncRun.finished_at)).where(
+                MarketRegistrySyncRun.status == "completed"
+            )
+        )
+    return ensure_utc(finished_at) if finished_at is not None else None
+
+
+def has_collectable_markets() -> bool:
+    with database_session() as session:
+        condition_id = session.scalar(
+            select(PolymarketMarket.condition_id)
+            .where(
+                PolymarketMarket.active.is_(True),
+                PolymarketMarket.closed.is_(False),
+                PolymarketMarket.archived.is_(False),
+                PolymarketMarket.enable_order_book.is_(True),
+            )
+            .limit(1)
+        )
+    return condition_id is not None
 
 
 def create_orderbook_collection_run(

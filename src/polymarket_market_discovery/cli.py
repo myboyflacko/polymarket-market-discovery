@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,6 +19,7 @@ if TYPE_CHECKING:
     from polymarket_market_discovery.orderbooks.service import (
         OrderbookCollectionService,
     )
+    from polymarket_market_discovery.pipeline.coordinator import PipelineCoordinator
 
 
 logger = logging.getLogger(__name__)
@@ -63,17 +63,18 @@ def build_parser() -> argparse.ArgumentParser:
     schedule_parser = subparsers.add_parser(
         "schedule", help="Run services continuously."
     )
-    schedule_parser.add_argument("service", choices=SERVICES)
     schedule_parser.add_argument("--discovery-interval", type=positive_int, default=900)
     schedule_parser.add_argument("--markets-interval", type=positive_int, default=900)
     schedule_parser.add_argument(
         "--orderbooks-interval", type=positive_int, default=300
     )
-    add_service_arguments(schedule_parser)
+    add_service_arguments(schedule_parser, include_registry_age=False)
     return parser
 
 
-def add_service_arguments(parser: argparse.ArgumentParser) -> None:
+def add_service_arguments(
+    parser: argparse.ArgumentParser, *, include_registry_age: bool = True
+) -> None:
     parser.add_argument(
         "--strategy",
         action="append",
@@ -82,28 +83,34 @@ def add_service_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--market-batch-size", type=positive_int, default=100)
     parser.add_argument("--orderbook-batch-size", type=positive_int, default=50)
+    if include_registry_age:
+        parser.add_argument(
+            "--market-registry-max-age-seconds", type=positive_int, default=1800
+        )
 
 
 async def run_once(args: argparse.Namespace) -> None:
-    if args.service in {"discovery", "all"}:
+    if args.service == "all":
+        result = await build_pipeline_coordinator(args, scheduled=False).run_once()
+        print_pipeline_result(result)
+        return
+    if args.service == "discovery":
         result = await build_discovery_service(args.strategy).run()
         print(
             f"Discovery {result.status}: run_id={result.run_id} "
             f"markets={result.discovered_market_count} observations={result.observation_count}"
         )
-        if result.status != "completed":
-            return
-    if args.service in {"markets", "all"}:
+    if args.service == "markets":
         result = await build_market_service(args.market_batch_size).run()
         print(
             f"Markets {result.status}: run_id={result.run_id} "
             f"checked={result.checked_market_count} created={result.created_market_count} "
             f"updated={result.updated_market_count}"
         )
-        if result.status != "completed":
-            return
-    if args.service in {"orderbooks", "all"}:
-        result = await build_orderbook_service(args.orderbook_batch_size).run()
+    if args.service == "orderbooks":
+        result = await build_orderbook_service(
+            args.orderbook_batch_size, args.market_registry_max_age_seconds
+        ).run()
         print(
             f"Orderbooks {result.status}: run_id={result.run_id} "
             f"markets={result.selected_market_count} tokens={result.selected_token_count} "
@@ -113,67 +120,7 @@ async def run_once(args: argparse.Namespace) -> None:
 
 
 async def schedule(args: argparse.Namespace) -> None:
-    runners: list[Awaitable[None]] = []
-    if args.service in {"discovery", "all"}:
-        service = build_discovery_service(args.strategy)
-        runners.append(
-            scheduled_runner(
-                interval=args.discovery_interval,
-                runner=service.run,
-                service="discovery",
-            )
-        )
-    if args.service in {"markets", "all"}:
-        service = build_market_service(args.market_batch_size)
-        runners.append(
-            scheduled_runner(
-                interval=args.markets_interval,
-                runner=service.run,
-                service="markets",
-            )
-        )
-    if args.service in {"orderbooks", "all"}:
-        service = build_orderbook_service(args.orderbook_batch_size)
-        runners.append(
-            scheduled_runner(
-                interval=args.orderbooks_interval,
-                runner=service.run,
-                service="orderbooks",
-            )
-        )
-    await asyncio.gather(*runners)
-
-
-async def scheduled_runner(
-    *, interval: int, runner: Callable[[], Awaitable[object]], service: str
-) -> None:
-    while True:
-        try:
-            result = await runner()
-            status = getattr(result, "status", "completed")
-            logger.info(
-                "Scheduled service finished",
-                extra={
-                    "event": (
-                        "service.skipped"
-                        if status == "skipped"
-                        else "service.failed"
-                        if status == "failed"
-                        else "service.completed"
-                    ),
-                    "context": {
-                        "service": service,
-                        "status": status,
-                        "run_id": getattr(result, "run_id", None),
-                    },
-                },
-            )
-        except Exception:
-            logger.exception(
-                "Scheduled service failed",
-                extra={"event": "service.failed", "context": {"service": service}},
-            )
-        await asyncio.sleep(interval)
+    await build_pipeline_coordinator(args, scheduled=True).run_forever()
 
 
 def build_discovery_service(
@@ -192,12 +139,59 @@ def build_market_service(batch_size: int) -> MarketRegistryService:
     return MarketRegistryService(batch_size=batch_size)
 
 
-def build_orderbook_service(batch_size: int) -> OrderbookCollectionService:
+def build_orderbook_service(
+    batch_size: int, market_registry_max_age_seconds: int = 1800
+) -> OrderbookCollectionService:
     from polymarket_market_discovery.orderbooks.service import (
         OrderbookCollectionService,
     )
 
-    return OrderbookCollectionService(batch_size=batch_size)
+    return OrderbookCollectionService(
+        batch_size=batch_size,
+        market_registry_max_age_seconds=market_registry_max_age_seconds,
+    )
+
+
+def build_pipeline_coordinator(
+    args: argparse.Namespace, *, scheduled: bool
+) -> PipelineCoordinator:
+    from polymarket_market_discovery.pipeline.coordinator import PipelineCoordinator
+
+    registry_max_age = (
+        args.markets_interval * 2
+        if scheduled
+        else args.market_registry_max_age_seconds
+    )
+    coordinator_options = (
+        {
+            "discovery_interval": args.discovery_interval,
+            "market_interval": args.markets_interval,
+            "orderbook_interval": args.orderbooks_interval,
+        }
+        if scheduled
+        else {}
+    )
+    return PipelineCoordinator(
+        discovery_runner=build_discovery_service(args.strategy).run,
+        market_runner=build_market_service(args.market_batch_size).run,
+        orderbook_runner=build_orderbook_service(
+            args.orderbook_batch_size, registry_max_age
+        ).run,
+        **coordinator_options,
+    )
+
+
+def print_pipeline_result(result: object) -> None:
+    print(f"Pipeline {getattr(result, 'status')}")
+    for layer in ("discovery", "markets", "orderbooks"):
+        layer_result = getattr(result, layer, None)
+        if layer_result is not None:
+            print(
+                f"{layer.title()} {layer_result.status}: "
+                f"run_id={layer_result.run_id}"
+            )
+    for layer, error in getattr(result, "errors", {}).items():
+        print(f"{layer.title()} failed: error={error}")
 
 
 def init_db() -> None:

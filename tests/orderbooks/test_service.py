@@ -28,6 +28,55 @@ def test_orderbooks_skip_when_pipeline_is_locked(monkeypatch) -> None:
     assert result.skip_reason == "pipeline_locked"
 
 
+def test_orderbooks_skip_stale_registry_without_creating_run(monkeypatch) -> None:
+    monkeypatch.setattr(service, "pipeline_lock", acquired_lock)
+    monkeypatch.setattr(service, "recover_orphaned_runs", lambda **kwargs: None)
+    monkeypatch.setattr(
+        service, "get_last_successful_market_registry_sync_at",
+        lambda: datetime(2026, 8, 9, 23, 29, 59, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        service, "create_orderbook_collection_run",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not create run")),
+    )
+    result = asyncio.run(
+        service.OrderbookCollectionService(
+            market_registry_max_age_seconds=1800
+        ).run(now=NOW)
+    )
+    assert result.status == "skipped"
+    assert result.skip_reason == "stale_market_registry"
+    assert result.run_id is None
+
+
+def test_orderbooks_treat_missing_registry_as_stale(monkeypatch) -> None:
+    monkeypatch.setattr(service, "pipeline_lock", acquired_lock)
+    monkeypatch.setattr(service, "recover_orphaned_runs", lambda **kwargs: None)
+    monkeypatch.setattr(
+        service, "get_last_successful_market_registry_sync_at", lambda: None
+    )
+    result = asyncio.run(service.OrderbookCollectionService().run(now=NOW))
+    assert result.skip_reason == "stale_market_registry"
+
+
+def test_orderbooks_skip_empty_universe_at_freshness_boundary(monkeypatch) -> None:
+    monkeypatch.setattr(service, "pipeline_lock", acquired_lock)
+    monkeypatch.setattr(service, "recover_orphaned_runs", lambda **kwargs: None)
+    monkeypatch.setattr(
+        service, "get_last_successful_market_registry_sync_at",
+        lambda: datetime(2026, 8, 9, 23, 30, tzinfo=UTC),
+    )
+    monkeypatch.setattr(service, "has_collectable_markets", lambda: False)
+    monkeypatch.setattr(
+        service, "create_orderbook_collection_run",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not create run")),
+    )
+    result = asyncio.run(service.OrderbookCollectionService().run(now=NOW))
+    assert result.status == "skipped"
+    assert result.skip_reason == "no_collectable_markets"
+    assert result.run_id is None
+
+
 def test_orderbooks_count_each_failed_token(monkeypatch) -> None:
     class FailingClient:
         async def get_order_books(self, params):
@@ -35,6 +84,10 @@ def test_orderbooks_count_each_failed_token(monkeypatch) -> None:
 
     monkeypatch.setattr(service, "pipeline_lock", acquired_lock)
     monkeypatch.setattr(service, "recover_orphaned_runs", lambda **kwargs: None)
+    monkeypatch.setattr(
+        service, "get_last_successful_market_registry_sync_at", lambda: NOW
+    )
+    monkeypatch.setattr(service, "has_collectable_markets", lambda: True)
     monkeypatch.setattr(
         service, "create_orderbook_collection_run", lambda **kwargs: None
     )

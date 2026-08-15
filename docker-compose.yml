@@ -21,7 +21,7 @@ services:
   scheduler:
     build: .
     image: polymarket-market-discovery:latest
-    command: ["polymarket-market-discovery", "schedule", "all"]
+    command: ["polymarket-market-discovery", "schedule"]
     environment: &app-environment
       POLYMARKET_DISCOVERY_POSTGRES_DB: ${POLYMARKET_DISCOVERY_POSTGRES_DB:-polymarket_market_discovery}
       POLYMARKET_DISCOVERY_POSTGRES_USER: ${POLYMARKET_DISCOVERY_POSTGRES_USER:-polymarket_market_discovery}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from polymarket_market_discovery.core.db.lock import pipeline_lock
@@ -12,6 +12,8 @@ from polymarket_market_discovery.orderbooks.repository import (
     complete_orderbook_collection_run,
     create_orderbook_collection_run,
     fail_orderbook_collection_run,
+    get_last_successful_market_registry_sync_at,
+    has_collectable_markets,
     snapshot_collectable_markets,
 )
 from polymarket_market_discovery.polymarket.client import get_polymarket_client
@@ -22,10 +24,16 @@ from polymarket_market_discovery.polymarket.params.orderbook import (
 
 
 class OrderbookCollectionService:
-    def __init__(self, *, batch_size: int = 50) -> None:
+    def __init__(
+        self, *, batch_size: int = 50,
+        market_registry_max_age_seconds: int = 1800,
+    ) -> None:
         if batch_size < 1 or batch_size > 500:
             raise ValueError("Orderbook batch size must be between 1 and 500")
+        if market_registry_max_age_seconds < 1:
+            raise ValueError("Market registry max age must be greater than zero")
         self.batch_size = batch_size
+        self.market_registry_max_age_seconds = market_registry_max_age_seconds
 
     async def run(self, *, now: datetime | None = None) -> OrderBookCollectionResult:
         started_at = ensure_utc(now or datetime.now(UTC))
@@ -41,11 +49,29 @@ class OrderbookCollectionService:
             return await self._run_locked(started_at=started_at)
 
     async def _run_locked(self, *, started_at: datetime) -> OrderBookCollectionResult:
+        registry_synced_at = get_last_successful_market_registry_sync_at()
+        if (
+            registry_synced_at is None
+            or started_at - registry_synced_at
+            > timedelta(seconds=self.market_registry_max_age_seconds)
+        ):
+            return OrderBookCollectionResult(
+                status="skipped", skip_reason="stale_market_registry",
+                generated_at=started_at,
+            )
+        if not has_collectable_markets():
+            return OrderBookCollectionResult(
+                status="skipped", skip_reason="no_collectable_markets",
+                generated_at=started_at,
+            )
         run_id = _build_run_id(started_at)
         create_orderbook_collection_run(
             run_id=run_id,
             started_at=started_at,
-            config_json={"batch_size": self.batch_size},
+            config_json={
+                "batch_size": self.batch_size,
+                "market_registry_max_age_seconds": self.market_registry_max_age_seconds,
+            },
         )
         try:
             items = snapshot_collectable_markets(run_id=run_id, selected_at=started_at)
