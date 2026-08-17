@@ -1,33 +1,107 @@
 # Polymarket Market Discovery
 
-Der Service entdeckt Märkte über austauschbare Strategien, pflegt daraus ein
-kanonisches Market-Universum und sammelt Orderbook-Historie für alle aktuell
-handelbaren Outcome-Tokens.
+`polymarket-market-discovery` builds and maintains a canonical,
+strategy-defined universe of Polymarket markets. It records why each market was
+discovered, enriches it with current market and token data, and collects
+periodic orderbook snapshots for backtesting.
 
-Der Service nutzt ausschließlich öffentliche Read-Endpunkte und platziert keine
-Orders, führt keine Trades aus und bewegt keine Funds.
+The canonical market registry is the primary output. The repository does not
+attempt to mirror every Polymarket market: its universe contains only markets
+found by the selected discovery strategies. PostgreSQL is the output interface;
+the service does not expose a separate read API.
 
-## Pipeline
+The service exclusively uses public read endpoints. It never places orders,
+executes trades, or moves funds.
 
-1. **Discovery** speichert jeden Discovery-Run und jede von einer Strategie
-   beobachtete Market-Evidenz append-only. Mehrere Evidenztreffer derselben
-   Strategie werden pro Market aggregiert. Die erste Strategie nimmt die
-   Schnittmenge der Top-25 DAY/OVERALL Leaderboards für PnL und Volume.
-2. **Market Registry** dedupliziert über `condition_id` und aktualisiert Status,
-   Enddatum sowie beide Outcome-Tokens über Gamma. Neue, unbekannte und alle noch
-   nicht terminalen Märkte werden erneut geprüft.
-3. **Orderbooks** sammeln beide Tokens aller kanonischen Märkte mit
-   `active=true`, `closed=false`, `archived=false` und `enable_order_book=true`.
+## Core concepts
 
-Ein Pipeline Coordinator führt den initialen Lauf sequenziell als Discovery →
-Market Registry → Orderbooks aus. Danach laufen Discovery und Registry auf
-festen 15-Minuten-Deadlines, Orderbooks alle 5 Minuten. Erfolgreiche Läufe
-kaskadieren in den jeweils nachgelagerten Layer, ohne feste Deadlines zu verschieben.
+### Strategies
 
-Discovery-Historie wird nie als Collection-Universum interpretiert. Ein einmal
-entdeckter Markt bleibt in der Registry, bis Gamma seinen aktuellen Status ändert.
+A strategy is a pluggable rule for deciding which markets are relevant to the
+universe. It reads public Polymarket data and emits normalized observations with
+a `condition_id`, an observation time, and supporting evidence.
 
-## Start
+Strategies only discover candidates. They do not decide the canonical market
+status, own token identity, or collect orderbooks. This separation allows new
+discovery signals to be added without changing the downstream registry and
+collection layers.
+
+The currently registered strategy is `whale_leaderboard_intersection`. The
+`--strategy` CLI option selects strategies and can be repeated. Without the
+option, all registered strategies run.
+
+### Discovery
+
+Discovery executes the selected strategies and stores every run and observation
+append-only. Repeated evidence from one strategy for the same market is
+aggregated into a single market observation while retaining the individual
+evidence items.
+
+Discovery history explains how and when a market entered consideration. It is
+not the current collection universe and does not determine whether a market is
+still tradable.
+
+### Markets / Market Registry
+
+Markets turns discovery candidates into the canonical market universe. It
+deduplicates markets by `condition_id` and uses the Gamma API to maintain current
+metadata, status, end date, and both outcome tokens.
+
+Newly discovered markets and all stored non-terminal markets are checked again.
+Once discovered, a market remains in the registry, including after it becomes
+closed or archived. Terminal markets are retained as canonical history but are
+no longer scheduled for regular refresh.
+
+### Orderbooks
+
+Orderbooks collects both outcome tokens for canonical markets that currently
+match all of these conditions:
+
+- `active=true`
+- `closed=false`
+- `archived=false`
+- `enable_order_book=true`
+
+Each collection stores the raw book and parsed values such as best prices,
+spread, midpoint, and top-level depth. The result is periodic snapshot history
+for backtesting. It is not tick data, trade history, or execution history.
+
+## Data flow
+
+```mermaid
+flowchart LR
+    DataAPI[Data API] --> Strategies[Discovery strategies]
+    Strategies --> Discovery[Discovery runs and evidence]
+    Discovery --> Registry[Markets / canonical registry]
+    GammaAPI[Gamma API] --> Registry
+    Registry --> Orderbooks[Orderbook collection]
+    CLOBAPI[CLOB API] --> Orderbooks
+    Discovery --> PostgreSQL[(PostgreSQL)]
+    Registry --> PostgreSQL
+    Orderbooks --> PostgreSQL
+```
+
+## Pipeline coordination
+
+The coordinator bootstraps the service sequentially:
+
+```text
+Discovery -> Markets -> Orderbooks
+```
+
+After bootstrap, Discovery and Markets run on fixed 15-minute deadlines and
+Orderbooks runs every 5 minutes. A successful upstream run can cascade into the
+next layer without shifting its fixed deadline. Missed ticks are coalesced into
+one run instead of producing catch-up bursts.
+
+All layers share a PostgreSQL advisory lock so they do not write concurrently.
+A fresh, last-known-good registry remains available when an upstream layer
+fails. For scheduled runs, the last completed registry sync may be at most twice
+the configured Markets interval old before Orderbook collection is skipped.
+
+## Running the service
+
+### Start with Docker Compose
 
 ```bash
 cp .env.example .env
@@ -36,37 +110,57 @@ docker compose --profile tools run --rm cli init-db
 docker compose up -d scheduler
 ```
 
-Einzelne oder alle Layer lassen sich über dieselbe CLI starten:
+The database baseline must be initialized before the scheduler starts.
+
+### Run individual layers
 
 ```bash
 polymarket-market-discovery run discovery
 polymarket-market-discovery run markets
 polymarket-market-discovery run orderbooks
 polymarket-market-discovery run all
+```
 
+`run all` executes Discovery, Markets, and Orderbooks sequentially and aggregates
+layer errors into one pipeline result.
+
+Manual Orderbook runs accept
+`--market-registry-max-age-seconds`; its default is 1800 seconds. Market and
+Orderbook request batch sizes can be changed with `--market-batch-size` and
+`--orderbook-batch-size`.
+
+### Run continuously
+
+```bash
 polymarket-market-discovery schedule
 ```
 
-`--strategy` ist wiederholbar; ohne Angabe laufen alle registrierten Strategien.
-`run all` arbeitet sequenziell und fasst Layer-Fehler in einem Pipeline-Ergebnis
-zusammen. Der Scheduler nutzt standardmäßig Intervalle von 900, 900 und 300
-Sekunden; verpasste Ticks werden einmal zusammengefasst, ohne Catch-up-Bursts.
-Orderbooks verwenden die kanonischen Tabellen `polymarket_markets` und
-`polymarket_tokens`. Der letzte erfolgreiche Registry-Sync darf höchstens zweimal
-so alt wie das Registry-Intervall sein. Manuelle Runs nutzen standardmäßig 1800
-Sekunden; `--market-registry-max-age-seconds` überschreibt diesen Wert. Eine
-frische persistierte Registry bleibt bei vorgelagerten Fehlern nutzbar.
-Alle Layer teilen einen PostgreSQL Advisory Lock, damit Discovery/Registry und
-Orderbook-Sammlung nicht gleichzeitig schreiben.
+The default intervals are 900 seconds for Discovery, 900 seconds for Markets,
+and 300 seconds for Orderbooks. They can be overridden with
+`--discovery-interval`, `--markets-interval`, and `--orderbooks-interval`.
 
-## Tabellen
+## PostgreSQL output
 
-| Bereich | Tabellen |
+The persisted tables are the service's read interface for downstream research
+and backtesting consumers.
+
+| Layer | Tables |
 | --- | --- |
 | Discovery | `market_discovery_runs`, `market_discovery_observations` |
-| Registry | `market_registry_sync_runs`, `polymarket_markets`, `polymarket_tokens`, `market_status_snapshots` |
+| Markets | `market_registry_sync_runs`, `polymarket_markets`, `polymarket_tokens`, `market_status_snapshots` |
 | Orderbooks | `orderbook_collection_runs`, `orderbook_collection_items`, `orderbook_snapshots` |
 
-Dies ist eine neue Datenbank-Baseline. Alte Watchlist-Tabellen oder Views werden
-nicht migriert. Bestehende Datenbanken und Compose-Volumes müssen deshalb vor der
-Initialisierung neu erstellt werden.
+Orderbook selection reads the canonical `polymarket_markets` and
+`polymarket_tokens` tables rather than reconstructing a universe from discovery
+history.
+
+## Known problems
+
+Current architectural and operational limitations are documented in the
+[Known Problems wiki](wiki/known-problems/KNOWN-PROBLEMS_INDEX.md).
+
+## Database baseline
+
+This repository uses a fresh database baseline. Legacy watchlist tables and
+views are not migrated. Existing databases and Docker Compose volumes must be
+recreated before initializing this baseline.
