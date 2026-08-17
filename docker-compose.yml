@@ -1,35 +1,41 @@
 services:
   postgres:
-    container_name: postgres
     image: postgres:16-alpine
     environment:
-      - POSTGRES_DB
-      - POSTGRES_PASSWORD
-      - POSTGRES_USER
-      - POSTGRES_PORT
+      POSTGRES_DB: ${POLYMARKET_DISCOVERY_POSTGRES_DB:-polymarket_market_discovery}
+      POSTGRES_USER: ${POLYMARKET_DISCOVERY_POSTGRES_USER:-polymarket_market_discovery}
+      POSTGRES_PASSWORD: ${POLYMARKET_DISCOVERY_POSTGRES_PASSWORD:-polymarket_market_discovery}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vl_polymarket_watchlist -d vl_polymarket_watchlist"]
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POLYMARKET_DISCOVERY_POSTGRES_USER:-polymarket_market_discovery} -d ${POLYMARKET_DISCOVERY_POSTGRES_DB:-polymarket_market_discovery}
       interval: 5s
       timeout: 5s
       retries: 12
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - polymarket-discovery-postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
     ports:
-      - ${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}
-      
+      - ${POLYMARKET_DISCOVERY_POSTGRES_PORT:-5432}:5432
+
   scheduler:
     build: .
-    image: vl-polymarket-watchlist:latest
-    command:
-      - vl-polymarket-watchlist
-      - schedule
-    environment:
-      - POLYMARKET_WATCHLIST_POSTGRES_DB
-      - POLYMARKET_WATCHLIST_POSTGRES_USER
-      - POLYMARKET_WATCHLIST_POSTGRES_PASSWORD
-      - POLYMARKET_WATCHLIST_POSTGRES_HOST
-      - POLYMARKET_WATCHLIST_POSTGRES_PORT
+    image: polymarket-market-discovery:latest
+    command: ["polymarket-market-discovery", "schedule"]
+    environment: &app-environment
+      POLYMARKET_DISCOVERY_POSTGRES_DB: ${POLYMARKET_DISCOVERY_POSTGRES_DB:-polymarket_market_discovery}
+      POLYMARKET_DISCOVERY_POSTGRES_USER: ${POLYMARKET_DISCOVERY_POSTGRES_USER:-polymarket_market_discovery}
+      POLYMARKET_DISCOVERY_POSTGRES_PASSWORD: ${POLYMARKET_DISCOVERY_POSTGRES_PASSWORD:-polymarket_market_discovery}
+      POLYMARKET_DISCOVERY_POSTGRES_HOST: postgres
+      POLYMARKET_DISCOVERY_POSTGRES_PORT: 5432
+      POLYMARKET_DISCOVERY_LOG_LEVEL: ${POLYMARKET_DISCOVERY_LOG_LEVEL:-INFO}
+      POLYMARKET_DATA_API_BASE_URL: ${POLYMARKET_DATA_API_BASE_URL:-https://data-api.polymarket.com}
+      POLYMARKET_GAMMA_API_BASE_URL: ${POLYMARKET_GAMMA_API_BASE_URL:-https://gamma-api.polymarket.com}
+      POLYMARKET_CLOB_API_BASE_URL: ${POLYMARKET_CLOB_API_BASE_URL:-https://clob.polymarket.com}
+      POLYMARKET_POSITIONS_REQUESTS_PER_SECOND: ${POLYMARKET_POSITIONS_REQUESTS_PER_SECOND:-8}
+      POLYMARKET_LEADERBOARD_REQUESTS_PER_SECOND: ${POLYMARKET_LEADERBOARD_REQUESTS_PER_SECOND:-3}
+      POLYMARKET_GAMMA_API_REQUESTS_PER_SECOND: ${POLYMARKET_GAMMA_API_REQUESTS_PER_SECOND:-5}
+      POLYMARKET_ORDERBOOK_REQUESTS_PER_SECOND: ${POLYMARKET_ORDERBOOK_REQUESTS_PER_SECOND:-5}
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,22 +43,14 @@ services:
 
   cli:
     build: .
-    image: vl-polymarket-watchlist:latest
-    entrypoint:
-      - vl-polymarket-watchlist
-    command:
-      - --help
-    environment:
-      - POLYMARKET_WATCHLIST_POSTGRES_DB
-      - POLYMARKET_WATCHLIST_POSTGRES_USER
-      - POLYMARKET_WATCHLIST_POSTGRES_PASSWORD
-      - POLYMARKET_WATCHLIST_POSTGRES_HOST
-      - POLYMARKET_WATCHLIST_POSTGRES_PORT
+    image: polymarket-market-discovery:latest
+    entrypoint: ["polymarket-market-discovery"]
+    command: ["--help"]
+    environment: *app-environment
     depends_on:
       postgres:
         condition: service_healthy
-    profiles:
-      - tools
+    profiles: ["tools"]
 
 volumes:
-  postgres-data:
+  polymarket-discovery-postgres-data:

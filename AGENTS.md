@@ -1,97 +1,55 @@
-Codex ist Flackos Senior-Developer-Partner: ruhig, erfahren, praktisch und erklärend.
+# Project
 
-Codex soll:
+`polymarket-market-discovery` is a Python 3.12 service that discovers Polymarket markets, maintains a canonical market universe, and collects order book history. The service uses public read-only endpoints exclusively.
 
-- wie ein Senior Developer arbeiten, der beim Bauen auch lehrt,
-- einfache, verständliche Lösungen bevorzugen,
-- komplexe Aufgaben in kleine nachvollziehbare Schritte zerlegen,
-- unkonventionell denken, aber nicht unnötig verkomplizieren,
-- Flacko beim Lernen unterstützen, statt nur fertigen Code abzuliefern.
+## Project Index
 
-## Kommunikationsstil
+Use `INDEX.md` in the repository root for initial orientation.
+When an entry point, top-level domain, or its responsibility changes, update `INDEX.md` in the same change.
 
-- Antworten kurz, knapp und informativ halten.
-- Nur ausführlicher erklären, wenn Flacko explizit um Erklärung, Hintergrund oder Details bittet.
-- Keine unnötigen Wiederholungen, langen Zusammenfassungen oder ausufernden Begründungen.
-- Final Answers standardmäßig auf drei Punkte begrenzen: geändert, verifiziert, offen.
-- Wenn nichts offen ist, explizit kurz sagen: `Offen: nichts`.
+## Additional Project Context
 
-## Arbeitsstandard
+Code and configuration are authoritative for current behavior. When non-standard project knowledge or prior project-specific decisions, systems, or procedures could affect the task, start at `wiki/index.md` and read only relevant active pages. Treat `wiki/raw/` as evidence. Modify the wiki only when explicitly requested, and read `wiki/SCHEMA.md` first.
 
-Core behavior:
+## Issue Tracker
 
-- Aufgabe zuerst verstehen: Goal, Kontext, Scope, Constraints und Definition of Done klären.
-- Relevante Annahmen sichtbar machen; fragen, wenn Ambiguität die Umsetzung verändern würde.
-- Tradeoffs benennen und unnötige Komplexität aktiv zurückweisen.
-- Simple, kleine, testbare Schritte bevorzugen.
-- Nur ändern, was direkt zur Aufgabe gehört.
-- Keine Nebenbei-Refactors und keine spekulativen Features.
-- Orphans nur entfernen, wenn sie durch die eigene Änderung entstanden sind.
-- Bei mehrstufiger Arbeit kurze `Step -> Verify`-Checkpoints definieren und bis verifiziert oder blockiert weiterarbeiten.
+For issue tracking use Linear through the Linear MCP. Use project `Polymarket Market Discovery` and team `Engineer`.
 
-Definition of Done:
+## Working Standards
 
-- Änderung ist umgesetzt und der Diff wurde geprüft.
-- Relevante `pytest`-Tests und `ruff`-Checks wurden ausgeführt oder ein klarer Grund genannt, warum nicht.
-- Offene Risiken, Annahmen oder Folgearbeiten werden kurz genannt.
-- Die Aufgabe bleibt klein, thematisch geschlossen und ohne unrelated Changes.
+- Change only what directly belongs to the task; avoid incidental refactors and speculative features.
+- Package manager: `uv`; run project commands with `uv run`.
+- Tests: `pytest`. Write new tests only when explicitly requested, then run them. Run the complete test suite only when explicitly requested.
+- Linter: `ruff`. Check only changed Python files with `uv run ruff check <files>`.
+- Automatically run the smallest task-appropriate verification: relevant existing `pytest` tests for behavior changes, otherwise a safe task-specific check. If no executable check exists, inspect the diff carefully, report the risk, and still commit locally.
+- Run builds such as `uv build` or Docker only when explicitly requested or when the task directly changes build or packaging behavior.
+- Keep output short and limited to relevant results.
 
-## Python-Standard
+## Workflow
 
-Für Python-Arbeit gelten diese Defaults, sofern das Projekt keinen eigenen Standard vorgibt:
+Implement → verify → lint → inspect the diff → commit. Fix failures and repeat from the affected check.
 
-- `pytest` für Tests.
-- `ruff` als Standard-Linter.
-- Mypy optional und projektabhängig.
-- Pydantic an Systemgrenzen: API-Input, Config, externe Daten, Agent-Payloads und LLM-/Agent-Tool-Payloads.
-- Type Hints für neue öffentliche Funktionen und Agent-/LLM-Tool-Funktionen.
-- Neuer Code ist erst fertig, wenn relevantes Verhalten getestet ist und bestehende Tests nicht brechen.
-- Tests werden nach Top-Level-Domain strukturiert; keine unsortierte Sammlung in einem einzigen flachen Test-Ordner, wenn klare Domains erkennbar sind.
+## Final Response
 
-## Docstrings
+Begin with a short outcome statement. Then use these labels, separated by blank lines, without Markdown headings:
 
-- Agent-/LLM-Tool-Funktionen müssen Google-Style-Docstrings haben.
-- Docstrings sollen Zweck, Args, Returns, Raises und wichtige Side Effects erklären, wenn relevant.
-- Selbsterklärende kleine Helper brauchen keine Docstrings.
-- Code wird dort dokumentiert, wo Verhalten, Constraints oder Entscheidungen nicht offensichtlich sind.
+- `**Changed**`: changed files and what changed
+- `**Verification**`: checks performed
+- `**Open / Risks**`: only when work remains or risks exist
+- `**Git**`: branch, commit, and PR status compactly on one line
 
 ## Gitflow
 
-Wenn das Arbeitsverzeichnis ein Git-Repository ist:
+When the working directory is a Git repository:
 
-- Nicht direkt auf `main` arbeiten oder pushen.
-- Vor Änderungen Git-Status prüfen.
-- `dev` ist ausschließlich Integrations- und Startbasis, keine Arbeitsbranch für Codeänderungen.
-- Standard-Arbeitsbasis ist immer `dev`: neue Arbeitsbranches entstehen von `dev`.
-- Wenn der Checkout nicht auf `dev` ist, vor neuen Änderungen nach `dev` wechseln, sofern das ohne Verlust oder Konflikt mit lokalen Änderungen möglich ist.
-- Wenn lokale Änderungen einen sicheren Wechsel nach `dev` verhindern, stoppen, den Zustand erklären und Flacko entscheiden lassen.
-- Jede Arbeitsbranch hat genau einen fachlichen Zweck.
-- Eine Branch darf nur Änderungen enthalten, die direkt zu diesem Zweck gehören.
-- Keine gemischten Änderungen: keine Nebenfixes, Refactors, Docs-Änderungen oder Cleanup, wenn sie nicht direkt zur Aufgabe gehören.
-- Vor jeder Änderung prüfen:
-  1. Auf welcher Branch bin ich?
-  2. Passt der Branch-Name eindeutig zur Aufgabe?
-  3. Sind vorhandene uncommitted Änderungen fachlich Teil derselben Aufgabe?
-- Wenn eine dieser Fragen mit Nein oder Unklar beantwortet wird, stoppen und Flacko fragen.
-- Vor Branch-Entscheidungen prüfen, ob eine bestehende Branch fachlich zur Aufgabe passt.
-- Eine bestehende Branch darf nur weiterverwendet werden, wenn ihr Zweck eindeutig zur aktuellen Aufgabe passt und keine fachfremden Änderungen enthält.
-- Wenn eine passende Branch existiert und der aktuelle Commit-/Working-Tree-Stand konfliktfrei dazu passt, diese Branch verwenden.
-- Wenn keine passende Branch existiert, eine neue Branch erstellen.
-- Der Branch-Typ wird anhand des Prompts gewählt, z. B. `feature/*`, `refactor/*`, `fix/*` oder `docs/*`.
-- Branch-Namen müssen den Zweck ausdrücken, z. B. `feature/pool-rebalance-config`, `fix/order-size-validation`, `refactor/exchange-client-boundary` oder `docs/agent-gitflow`.
-- Vor neuen Codeänderungen von `dev` aus eine passende Arbeitsbranch verwenden oder erstellen.
-- Änderungen, die mehrere Files umfassen, müssen auf einer passenden bestehenden oder neuen Arbeitsbranch umgesetzt werden.
-- Direkt auf `dev` sind nur kleine Single-file-Docs-/Guideline-Änderungen erlaubt, die kein Codeverhalten ändern.
-- Kleine Änderungen dürfen auf der aktuellen Branch passieren, wenn dadurch kein Commit-Stand vermischt wird und keine Konflikte entstehen.
-- Falls andere Branches oder lokale Änderungen noch uncommitted Änderungen enthalten, prüfen, ob sie mit der aktuellen Aufgabe interferieren.
-- Wenn diese Änderungen nicht interferieren, kann von `dev` eine neue Branch erstellt werden.
-- Wenn sie interferieren könnten oder die Lage unklar ist, stoppen und Flacko um Clarification bitten.
-- Wenn während der Arbeit ein unabhängiges Problem auffällt, nicht nebenbei fixen. Stattdessen notieren und separat auf neuer Branch bearbeiten.
-- Abgeschlossene Änderungen standardmäßig committen, außer Flacko sagt explizit, dass nicht committet werden soll.
-- Commit-Messages beschreiben die Änderung nach Funktionalität, nicht nach Dateinamen.
-- Pushen ist nur erlaubt, wenn die relevanten Tests vorher erfolgreich gelaufen sind.
-- Änderungen klein und thematisch halten.
-- Konflikte mit fremden Branches vermeiden; bei Unsicherheit stoppen und fragen.
+- Never work on or push directly to `main`. `dev` is the clean starting point, not a working branch.
+- Check status and branches at the start. If an existing clean working branch clearly matches the task, continue there directly.
+- Otherwise, create a branch from `dev` with exactly one purpose: `feature/*`, `fix/*`, `refactor/*`, or `docs/*`. Use the normal working directory for sequential and small tasks.
+- Use separate worktrees only when multiple tasks or agents are working in parallel.
+- If the working branch to be used is not clean, or `dev` is not clean when creating a new branch, ask Flacko what should happen to those changes before editing.
+- Commit only task-related changes; report unrelated findings only as open work. By default, commit completed changes locally with a functional commit message.
+- Push the working branch and create or update a PR only when explicitly requested and after relevant checks pass.
 
+## Safety
 
-Keine Live-Trades, keine echten Orders und keine Funds-Bewegung ohne explizite Freigabe von Flacko.
+Do not place live trades or real orders, or move funds, without explicit approval from Flacko.
