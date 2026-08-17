@@ -4,7 +4,7 @@
 
 ## Knowledge Domains
 
-No knowledge domains have been curated yet.
+- [[KNOWN-PROBLEMS_INDEX]] — current repository problems with operational or architectural impact
 
 ## Evidence
 

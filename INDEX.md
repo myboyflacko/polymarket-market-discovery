@@ -11,6 +11,7 @@
 | `src/polymarket_market_discovery/pipeline/` | Sequenzielle Initialisierung, Kaskaden und feste Layer-Intervalle |
 | `src/polymarket_market_discovery/polymarket/` | Externe Polymarket-API-Grenze |
 | `tests/` | Nach den Source-Domains strukturierte Tests |
+| `wiki/` | Kuratiertes Projektwissen und bekannte aktuelle Probleme |
 | `README.md` | Nutzung und Betrieb |
 | `pyproject.toml` | Python-Projektkonfiguration und Abhängigkeiten |
 | `alembic.ini` | Alembic-Migrationskonfiguration |
