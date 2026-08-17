@@ -105,12 +105,15 @@ the configured Markets interval old before Orderbook collection is skipped.
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres
-docker compose --profile tools run --rm cli init-db
-docker compose up -d scheduler
+make postgres
+make cli ARGS="init-db"
+make up
 ```
 
 The database baseline must be initialized before the scheduler starts.
+The regular Make targets use Docker Compose with the local `.env` file. The
+same commands remain available through Doppler with the `doppler-` prefix, for
+example `make doppler-up` or `make doppler-cli ARGS="init-db"`.
 
 ### Run individual layers
 
