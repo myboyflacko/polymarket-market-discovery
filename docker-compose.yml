@@ -69,7 +69,7 @@ services:
       - app-network
 
   postgres-mcp:
-    image: ghcr.io/pgedge/postgres-mcp:v1.0.0
+    image: ghcr.io/pgedge/postgres-mcp:sha-43ab3b1
     ports:
       - "127.0.0.1:${MCP_SERVER_PORT:-8080}:8080"
     environment:
