@@ -110,6 +110,10 @@ make cli ARGS="init-db"
 make up
 ```
 
+Create `.env` once from the tracked example and adjust its values for the local
+environment. The file is ignored by Git and is read automatically by Docker
+Compose.
+
 The database baseline must be initialized before the scheduler starts.
 The regular Make targets use Docker Compose with the local `.env` file. The
 same commands remain available through Doppler with the `doppler-` prefix, for
@@ -156,6 +160,46 @@ and backtesting consumers.
 Orderbook selection reads the canonical `polymarket_markets` and
 `polymarket_tokens` tables rather than reconstructing a universe from discovery
 history.
+
+## PostgreSQL MCP access
+
+The optional `postgres-mcp` Compose service exposes the same PostgreSQL database
+to MCP clients such as Codex. It is bound to `127.0.0.1` on
+`MCP_SERVER_PORT` (default `8080`) and serves the streamable HTTP endpoint at
+`/mcp/v1`. Database writes are disabled in the MCP container, so its tools can
+inspect schemas and query collected data without modifying it.
+
+First create the local environment file, if it does not exist yet, and set a
+non-empty secret as `PGEDGE_MCP_TOKEN`:
+
+```bash
+cp .env.example .env
+```
+
+Then start PostgreSQL and the MCP service explicitly. The MCP container belongs
+to the optional Compose `tools` profile and is not started by `make up` alone.
+
+```bash
+docker compose up -d postgres postgres-mcp
+docker compose ps postgres postgres-mcp
+```
+
+The project-scoped [`.codex/config.toml`](.codex/config.toml) registers the
+server as `polymarket_postgres` and reads its bearer token from the
+`PGEDGE_MCP_TOKEN` environment variable. Export the values from `.env` before
+starting Codex, then restart Codex so it reloads the project configuration:
+
+```bash
+set -a
+source .env
+set +a
+codex
+```
+
+Once connected, MCP clients can discover the `public` schema, inspect table
+metadata, count rows, run read-only SQL queries, and analyze query plans. The
+MCP service is only a database access layer; market discovery and orderbook
+collection continue to be performed by the application services.
 
 ## Known problems
 
