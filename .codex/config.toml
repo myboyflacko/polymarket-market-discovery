@@ -1,0 +1,4 @@
+[mcp_servers.polymarket_postgres]
+url = "http://127.0.0.1:8080/mcp/v1"
+bearer_token_env_var = "PGEDGE_MCP_TOKEN"
+enabled = true

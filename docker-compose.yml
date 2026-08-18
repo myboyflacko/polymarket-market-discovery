@@ -17,6 +17,8 @@ services:
     restart: unless-stopped
     ports:
       - ${POLYMARKET_DISCOVERY_POSTGRES_PORT:-5432}:5432
+    networks:
+      - app-network
 
   scheduler:
     build: .
@@ -30,8 +32,18 @@ services:
       POLYMARKET_DISCOVERY_POSTGRES_PORT: 5432
       POLYMARKET_DISCOVERY_LOG_LEVEL: ${POLYMARKET_DISCOVERY_LOG_LEVEL:-INFO}
       POLYMARKET_DATA_API_BASE_URL: ${POLYMARKET_DATA_API_BASE_URL:-https://data-api.polymarket.com}
+      POLYMARKET_DATA_API_MAX_CONCURRENT_REQUESTS: ${POLYMARKET_DATA_API_MAX_CONCURRENT_REQUESTS:-4}
+      POLYMARKET_DATA_API_TIMEOUT_SECONDS: ${POLYMARKET_DATA_API_TIMEOUT_SECONDS:-10}
+      POLYMARKET_DATA_API_RATE_LIMIT_RETRY_ATTEMPTS: ${POLYMARKET_DATA_API_RATE_LIMIT_RETRY_ATTEMPTS:-5}
+      POLYMARKET_DATA_API_RATE_LIMIT_BACKOFF_SECONDS: ${POLYMARKET_DATA_API_RATE_LIMIT_BACKOFF_SECONDS:-60}
       POLYMARKET_GAMMA_API_BASE_URL: ${POLYMARKET_GAMMA_API_BASE_URL:-https://gamma-api.polymarket.com}
+      POLYMARKET_GAMMA_API_TIMEOUT_SECONDS: ${POLYMARKET_GAMMA_API_TIMEOUT_SECONDS:-10}
+      POLYMARKET_GAMMA_API_RATE_LIMIT_RETRY_ATTEMPTS: ${POLYMARKET_GAMMA_API_RATE_LIMIT_RETRY_ATTEMPTS:-5}
+      POLYMARKET_GAMMA_API_RATE_LIMIT_BACKOFF_SECONDS: ${POLYMARKET_GAMMA_API_RATE_LIMIT_BACKOFF_SECONDS:-10}
       POLYMARKET_CLOB_API_BASE_URL: ${POLYMARKET_CLOB_API_BASE_URL:-https://clob.polymarket.com}
+      POLYMARKET_CLOB_API_TIMEOUT_SECONDS: ${POLYMARKET_CLOB_API_TIMEOUT_SECONDS:-10}
+      POLYMARKET_CLOB_API_RATE_LIMIT_RETRY_ATTEMPTS: ${POLYMARKET_CLOB_API_RATE_LIMIT_RETRY_ATTEMPTS:-5}
+      POLYMARKET_CLOB_API_RATE_LIMIT_BACKOFF_SECONDS: ${POLYMARKET_CLOB_API_RATE_LIMIT_BACKOFF_SECONDS:-10}
       POLYMARKET_POSITIONS_REQUESTS_PER_SECOND: ${POLYMARKET_POSITIONS_REQUESTS_PER_SECOND:-8}
       POLYMARKET_LEADERBOARD_REQUESTS_PER_SECOND: ${POLYMARKET_LEADERBOARD_REQUESTS_PER_SECOND:-3}
       POLYMARKET_GAMMA_API_REQUESTS_PER_SECOND: ${POLYMARKET_GAMMA_API_REQUESTS_PER_SECOND:-5}
@@ -40,6 +52,8 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - app-network
 
   cli:
     build: .
@@ -51,6 +65,47 @@ services:
       postgres:
         condition: service_healthy
     profiles: ["tools"]
+    networks:
+      - app-network
+
+  postgres-mcp:
+    image: ghcr.io/pgedge/postgres-mcp:sha-cc13a18
+    ports:
+      - "127.0.0.1:${MCP_SERVER_PORT:-8080}:8080"
+    environment:
+      PGEDGE_HTTP_ENABLED: "true"
+      PGEDGE_AUTH_ENABLED: "${PGEDGE_AUTH_ENABLED:-true}"
+      PGEDGE_DB_HOST: postgres
+      PGEDGE_DB_PORT: 5432
+      PGEDGE_DB_NAME: ${POLYMARKET_DISCOVERY_POSTGRES_DB:-polymarket_market_discovery}
+      PGEDGE_DB_USER: "${PGEDGE_DB_USER:-${POLYMARKET_DISCOVERY_POSTGRES_USER:-polymarket_market_discovery}}"
+      PGEDGE_DB_PASSWORD: "${PGEDGE_DB_PASSWORD:-${POLYMARKET_DISCOVERY_POSTGRES_PASSWORD:-polymarket_market_discovery}}"
+      PGEDGE_DB_SSLMODE: disable
+      PGEDGE_DB_ALLOW_WRITES: "false"
+      PGEDGE_TOKEN_FILE: /app/data/tokens.json
+      PGEDGE_USERS_FILE: /app/data/users.json
+      PGEDGE_DATA_DIR: /app/data
+      INIT_TOKENS: "${PGEDGE_MCP_TOKEN:-}"
+    volumes:
+      - mcp-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/bin/sh", "-c", "test -f /app/pgedge-postgres-mcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   polymarket-discovery-postgres-data:
+  mcp-data:
+
+networks:
+  app-network:
+    driver: bridge
