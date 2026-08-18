@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "polymarket-market-discovery"
 version = "0.1.0"
 description = "Discover whale-held Polymarket markets and collect their orderbooks."
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic==1.17.2",
