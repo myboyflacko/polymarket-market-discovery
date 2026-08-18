@@ -161,6 +161,28 @@ Orderbook selection reads the canonical `polymarket_markets` and
 `polymarket_tokens` tables rather than reconstructing a universe from discovery
 history.
 
+### Active orderbook markets view
+
+The database baseline creates the `active_orderbook_markets` view as a
+query-ready projection of the current canonical market registry. It exposes all
+columns from `polymarket_markets` and includes only markets that satisfy the
+same market-level conditions used for orderbook collection:
+
+- `active=true`
+- `closed=false`
+- `archived=false`
+- `enable_order_book=true`
+
+The view contains current market metadata, not token rows or collected
+orderbook snapshots. Tokens remain available in `polymarket_tokens`, while
+historical books remain in `orderbook_snapshots`.
+
+```sql
+SELECT condition_id, slug, title, end_date
+FROM active_orderbook_markets
+ORDER BY end_date;
+```
+
 ## PostgreSQL MCP access
 
 The optional `postgres-mcp` Compose service exposes the same PostgreSQL database
@@ -208,6 +230,11 @@ Current architectural and operational limitations are documented in the
 
 ## Database baseline
 
-This repository uses a fresh database baseline. Legacy watchlist tables and
-views are not migrated. Existing databases and Docker Compose volumes must be
-recreated before initializing this baseline.
+This repository uses a fresh database baseline. It creates the persisted tables
+listed above together with the `active_orderbook_markets` view. Legacy
+watchlist tables and views are not migrated.
+
+An existing database already marked with the baseline revision does not receive
+later edits to that same baseline automatically. Databases and Docker Compose
+volumes initialized before the current baseline must therefore be recreated
+before running `init-db`.
