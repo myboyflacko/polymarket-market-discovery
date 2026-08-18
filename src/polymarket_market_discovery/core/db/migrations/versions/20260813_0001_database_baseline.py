@@ -82,6 +82,15 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('condition_id')
     )
     op.create_index('ix_polymarket_markets_collection_status', 'polymarket_markets', ['active', 'closed', 'archived'], unique=False)
+    op.execute(
+        """
+        CREATE VIEW active_orderbook_markets AS
+        SELECT *
+        FROM polymarket_markets
+        WHERE active IS TRUE
+          AND enable_order_book IS TRUE
+        """
+    )
     op.create_table('market_discovery_observations',
     sa.Column('id', sa.BigInteger().with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('discovery_run_id', sa.String(), nullable=False),
@@ -198,6 +207,7 @@ def downgrade() -> None:
     op.drop_index('ix_discovery_observations_discovery_run', table_name='market_discovery_observations')
     op.drop_index('ix_discovery_observations_condition_observed', table_name='market_discovery_observations')
     op.drop_table('market_discovery_observations')
+    op.execute('DROP VIEW active_orderbook_markets')
     op.drop_index('ix_polymarket_markets_collection_status', table_name='polymarket_markets')
     op.drop_table('polymarket_markets')
     op.drop_table('orderbook_collection_runs')
