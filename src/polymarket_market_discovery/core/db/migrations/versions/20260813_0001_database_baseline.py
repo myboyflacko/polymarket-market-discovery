@@ -88,6 +88,8 @@ def upgrade() -> None:
         SELECT *
         FROM polymarket_markets
         WHERE active IS TRUE
+          AND closed IS FALSE
+          AND archived IS FALSE
           AND enable_order_book IS TRUE
         """
     )
