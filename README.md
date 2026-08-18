@@ -238,3 +238,7 @@ An existing database already marked with the baseline revision does not receive
 later edits to that same baseline automatically. Databases and Docker Compose
 volumes initialized before the current baseline must therefore be recreated
 before running `init-db`.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
